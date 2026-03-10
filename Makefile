@@ -15,18 +15,18 @@ dev:  ## Install with dev dependencies
 
 run:  ## Run MCP server (kills existing on port 8001 first)
 	@lsof -ti tcp:8001 2>/dev/null | xargs kill -9 2>/dev/null; sleep 0.3
-	uv run python -m superset_mcp
+	uv run python -m mcp_superset
 
 run-bg:  ## Run MCP server in background
 	@lsof -ti tcp:8001 2>/dev/null | xargs kill -9 2>/dev/null; sleep 0.3
-	@nohup uv run python -m superset_mcp > /tmp/superset_mcp.log 2>&1 & echo "PID: $$!"
-	@echo "Logs: tail -f /tmp/superset_mcp.log"
+	@nohup uv run python -m mcp_superset > /tmp/mcp_superset.log 2>&1 & echo "PID: $$!"
+	@echo "Logs: tail -f /tmp/mcp_superset.log"
 
 stop:  ## Stop running MCP server
 	@lsof -ti tcp:8001 2>/dev/null | xargs kill -9 2>/dev/null && echo "Stopped" || echo "Not running"
 
 logs:  ## Show MCP server logs
-	@tail -f /tmp/superset_mcp.log
+	@tail -f /tmp/mcp_superset.log
 
 # ── Code Quality ─────────────────────────────────────────────
 
@@ -64,7 +64,7 @@ release:  ## Create GitHub release → auto-publish to PyPI (usage: make release
 release-test:  ## Build and upload to TestPyPI (manual)
 	uv build
 	uv run twine upload --repository testpypi dist/*
-	@echo "\nCheck: https://test.pypi.org/project/superset-mcp/"
+	@echo "\nCheck: https://test.pypi.org/project/mcp-superset/"
 
 # ── Info ─────────────────────────────────────────────────────
 
