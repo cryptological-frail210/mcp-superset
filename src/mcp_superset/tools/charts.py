@@ -1,4 +1,4 @@
-"""Инструменты для управления графиками (charts) Superset."""
+"""Tools for managing Superset charts."""
 
 import base64
 import json
@@ -6,10 +6,10 @@ import re
 
 from mcp_superset.tools.helpers import auto_sync_chart_dashboards
 
-# Паттерны moment.js форматов дат, которые НЕ работают в Superset 6.x
-# Superset использует D3 strftime (%Y-%m-%d), moment.js (YYYY-MM-DD) показывает литерал
+# Moment.js date format patterns that do NOT work in Superset 6.x.
+# Superset uses D3 strftime (%Y-%m-%d); moment.js (YYYY-MM-DD) renders as literal text.
 _MOMENTJS_DATE_PATTERNS = re.compile(
-    r"(?<![%\w])"  # не после % или буквы (исключить D3 форматы и слова)
+    r"(?<![%\w])"  # not preceded by % or a word char (exclude D3 formats and words)
     r"(?:"
     r"YYYY[-/.]MM[-/.]DD"  # YYYY-MM-DD, YYYY/MM/DD, YYYY.MM.DD
     r"|DD[-/.]MM[-/.]YYYY"  # DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY
@@ -21,7 +21,7 @@ _MOMENTJS_DATE_PATTERNS = re.compile(
     r")"
 )
 
-# Параметры params, в которых передаются форматы дат
+# Params keys that contain date formats
 _DATE_FORMAT_KEYS = {
     "table_timestamp_format",
     "x_axis_time_format",
@@ -30,35 +30,35 @@ _DATE_FORMAT_KEYS = {
     "header_timestamp_format",
 }
 
-# Legacy viz_type, удалённые из фронтенда Superset 5.0/6.x
-# Фронтенд вернёт ошибку: "Item with key 'X' is not registered"
+# Legacy viz_type values removed from the Superset 5.0/6.x frontend.
+# The frontend returns an error: "Item with key 'X' is not registered"
 _DEPRECATED_VIZ_TYPES = {
-    # Удалены в Superset 5.0 (авто-миграция через superset viz-migrations upgrade)
+    # Removed in Superset 5.0 (auto-migration via superset viz-migrations upgrade)
     "area": "echarts_area",
     "bar": "echarts_timeseries_bar",
-    "line": "echarts_timeseries_line (или echarts_timeseries_smooth для cardinal, echarts_timeseries_step для step)",
+    "line": "echarts_timeseries_line (or echarts_timeseries_smooth for cardinal, echarts_timeseries_step for step)",
     "heatmap": "heatmap_v2",
     "histogram": "histogram_v2",
     "sankey": "sankey_v2",
-    "sankey_loop": "нет замены (удалён без замены)",
-    "event_flow": "нет замены (удалён без замены)",
-    # Удалены в Superset 3.0/4.0
-    "dist_bar": "echarts_timeseries_bar (с orientation: horizontal для горизонтального)",
-    "dual_line": "mixed_timeseries (2 метрики с 2 осями Y)",
+    "sankey_loop": "no replacement (removed without a substitute)",
+    "event_flow": "no replacement (removed without a substitute)",
+    # Removed in Superset 3.0/4.0
+    "dist_bar": "echarts_timeseries_bar (with orientation: horizontal for horizontal layout)",
+    "dual_line": "mixed_timeseries (2 metrics with 2 Y-axes)",
     "treemap": "treemap_v2",
     "sunburst": "sunburst_v2",
     "pivot_table": "pivot_table_v2",
     "line_multi": "mixed_timeseries",
     "filter_box": "Native Dashboard Filters (dashboard_filter_add)",
-    # Удалены ранее
+    # Removed earlier
     "markup": "Dashboard Markdown component",
     "separator": "Dashboard Markdown component",
     "iframe": "Dashboard Markdown component",
 }
 
-# Актуальные viz_type в Superset 6.x (зарегистрированы в MainPreset.ts)
-# Используется для валидации — если viz_type нет ни в актуальных, ни в deprecated,
-# выдаём предупреждение (возможно опечатка)
+# Valid viz_type values in Superset 6.x (registered in MainPreset.ts).
+# Used for validation: if a viz_type is neither valid nor deprecated,
+# a warning is issued (possible typo).
 _VALID_VIZ_TYPES = {
     # ECharts
     "big_number",
@@ -87,13 +87,13 @@ _VALID_VIZ_TYPES = {
     "tree_chart",
     "treemap_v2",
     "waterfall",
-    # Таблицы
+    # Tables
     "table",
     "pivot_table_v2",
     "ag-grid-table",
-    # Шаблоны и текст
+    # Templates and text
     "handlebars",
-    # Карты
+    # Maps
     "country_map",
     "world_map",
     "mapbox",
@@ -109,7 +109,7 @@ _VALID_VIZ_TYPES = {
     "deck_polygon",
     "deck_scatter",
     "deck_screengrid",
-    # Legacy (пока зарегистрированы, но могут быть удалены в будущем)
+    # Legacy (still registered but may be removed in the future)
     "bubble",
     "bullet",
     "cal_heatmap",
@@ -127,10 +127,18 @@ _VALID_VIZ_TYPES = {
 
 
 def _validate_chart_params(params_str: str | None, viz_type: str | None = None) -> str | None:
-    """Проверить params и viz_type на типичные ошибки. Возвращает текст ошибки или None."""
+    """Validate params and viz_type for common errors.
+
+    Args:
+        params_str: JSON string of chart params to validate.
+        viz_type: Chart visualization type to check against known types.
+
+    Returns:
+        Error message string if validation fails, None otherwise.
+    """
     errors = []
 
-    # Проверка deprecated viz_type
+    # Check for deprecated viz_type
     vt = viz_type
     if vt is None and params_str:
         try:
@@ -140,16 +148,16 @@ def _validate_chart_params(params_str: str | None, viz_type: str | None = None) 
     if vt and vt in _DEPRECATED_VIZ_TYPES:
         replacement = _DEPRECATED_VIZ_TYPES[vt]
         errors.append(
-            f"viz_type '{vt}' удалён из Superset 6.x (ошибка 'Item with key \"{vt}\" "
-            f"is not registered'). Используйте: {replacement}"
+            f"viz_type '{vt}' has been removed from Superset 6.x (error: 'Item with key \"{vt}\" "
+            f"is not registered'). Use instead: {replacement}"
         )
     elif vt and vt not in _VALID_VIZ_TYPES:
         errors.append(
-            f"viz_type '{vt}' не найден в списке актуальных типов Superset 6.x. "
-            f"Возможно опечатка. Доступные типы: " + ", ".join(sorted(_VALID_VIZ_TYPES))
+            f"viz_type '{vt}' not found in the list of valid Superset 6.x types. "
+            f"Possible typo. Available types: " + ", ".join(sorted(_VALID_VIZ_TYPES))
         )
 
-    # Парсинг params для всех проверок ниже
+    # Parse params for all checks below
     if params_str:
         try:
             params_dict = json.loads(params_str)
@@ -158,31 +166,31 @@ def _validate_chart_params(params_str: str | None, viz_type: str | None = None) 
     else:
         params_dict = {}
 
-    # Проверка granularity_sqla — ОБЯЗАТЕЛЕН для работы фильтров дашборда
+    # Check granularity_sqla — REQUIRED for dashboard filters to work
     if params_str and not params_dict.get("granularity_sqla"):
         errors.append(
-            "params не содержит 'granularity_sqla' — БЕЗ этого параметра "
-            "фильтры дашборда (time range, native filters) НЕ будут работать "
-            "для этого чарта. SQL будет генерироваться без WHERE по дате. "
-            "Добавьте granularity_sqla с названием временной колонки датасета "
-            '(напр. "granularity_sqla": "call_date"). '
-            "Узнать колонку: dataset_get → main_dttm_col или columns[].is_dttm=true"
+            "params does not contain 'granularity_sqla' — WITHOUT this parameter "
+            "dashboard filters (time range, native filters) will NOT work "
+            "for this chart. SQL will be generated without a WHERE clause on date. "
+            "Add granularity_sqla with the name of the dataset's temporal column "
+            '(e.g. "granularity_sqla": "call_date"). '
+            "To find the column: dataset_get -> main_dttm_col or columns[].is_dttm=true"
         )
 
-    # Проверка moment.js форматов в params
+    # Check for moment.js formats in params
     if params_str:
         for key in _DATE_FORMAT_KEYS:
             value = params_dict.get(key)
             if isinstance(value, str) and _MOMENTJS_DATE_PATTERNS.search(value):
                 errors.append(
-                    f"Параметр '{key}' содержит moment.js формат '{value}' — "
-                    f"Superset 6.x покажет его как ЛИТЕРАЛЬНЫЙ ТЕКСТ! "
-                    f"Используйте D3 strftime: "
-                    f'"%Y-%m-%d" (дата), "%Y-%m-%d %H:%M" (дата+время), '
-                    f'"%d.%m.%Y" (русский), "%Y-%m" (год-месяц), "%Y" (год)'
+                    f"Parameter '{key}' contains moment.js format '{value}' — "
+                    f"Superset 6.x will render it as LITERAL TEXT! "
+                    f"Use D3 strftime instead: "
+                    f'"%Y-%m-%d" (date), "%Y-%m-%d %H:%M" (datetime), '
+                    f'"%d.%m.%Y" (European), "%Y-%m" (year-month), "%Y" (year)'
                 )
 
-        # Проверка moment.js формата в query_context form_data
+        # Check for moment.js format in query_context form_data
         form_data = params_dict.get("form_data", {})
         if isinstance(form_data, str):
             try:
@@ -194,17 +202,24 @@ def _validate_chart_params(params_str: str | None, viz_type: str | None = None) 
                 value = form_data.get(key)
                 if isinstance(value, str) and _MOMENTJS_DATE_PATTERNS.search(value):
                     errors.append(
-                        f"form_data.'{key}' содержит moment.js формат '{value}' — "
-                        f'замените на D3 strftime (напр. "%Y-%m-%d")'
+                        f"form_data.'{key}' contains moment.js format '{value}' — "
+                        f'replace with D3 strftime (e.g. "%Y-%m-%d")'
                     )
 
     if errors:
-        return "ОТКЛОНЕНО:\n" + "\n".join(f"• {e}" for e in errors)
+        return "REJECTED:\n" + "\n".join(f"• {e}" for e in errors)
     return None
 
 
 def _validate_query_context(query_context_str: str | None) -> str | None:
-    """Проверить query_context на moment.js форматы."""
+    """Validate query_context for moment.js date formats.
+
+    Args:
+        query_context_str: JSON string of query context to validate.
+
+    Returns:
+        Error message string if validation fails, None otherwise.
+    """
     if not query_context_str:
         return None
     try:
@@ -213,7 +228,7 @@ def _validate_query_context(query_context_str: str | None) -> str | None:
         return None
 
     errors = []
-    # Проверяем form_data внутри query_context
+    # Check form_data inside query_context
     form_data = qc.get("form_data", {})
     if isinstance(form_data, str):
         try:
@@ -225,16 +240,21 @@ def _validate_query_context(query_context_str: str | None) -> str | None:
             value = form_data.get(key)
             if isinstance(value, str) and _MOMENTJS_DATE_PATTERNS.search(value):
                 errors.append(
-                    f"query_context.form_data.'{key}' содержит moment.js формат "
-                    f"'{value}' — замените на D3 strftime (напр. \"%Y-%m-%d\")"
+                    f"query_context.form_data.'{key}' contains moment.js format "
+                    f"'{value}' — replace with D3 strftime (e.g. \"%Y-%m-%d\")"
                 )
 
     if errors:
-        return "ОТКЛОНЕНО:\n" + "\n".join(f"• {e}" for e in errors)
+        return "REJECTED:\n" + "\n".join(f"• {e}" for e in errors)
     return None
 
 
 def register_chart_tools(mcp):
+    """Register all chart-related MCP tools on the given server.
+
+    Args:
+        mcp: The MCP server instance to register tools on.
+    """
     from mcp_superset.server import superset_client as client
 
     @mcp.tool
@@ -244,19 +264,19 @@ def register_chart_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список графиков Superset с пагинацией.
+        """List Superset charts with pagination.
 
-        ВАЖНО: всегда вызывайте этот инструмент перед chart_get/chart_delete,
-        чтобы узнать актуальные ID графиков.
+        IMPORTANT: always call this tool before chart_get/chart_delete
+        to look up actual chart IDs.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:slice_name,opr:ct,value:поиск)))
-                - По типу: (filters:!((col:viz_type,opr:eq,value:table)))
-                - По датасету: (filters:!((col:datasource_id,opr:eq,value:1)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for searching. Examples:
+                - By name: (filters:!((col:slice_name,opr:ct,value:search_term)))
+                - By type: (filters:!((col:viz_type,opr:eq,value:table)))
+                - By dataset: (filters:!((col:datasource_id,opr:eq,value:1)))
+            get_all: Retrieve ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -272,13 +292,13 @@ def register_chart_tools(mcp):
 
     @mcp.tool
     async def superset_chart_get(chart_id: int) -> str:
-        """Получить детальную информацию о графике по ID.
+        """Get detailed information about a chart by ID.
 
-        Возвращает все настройки: viz_type, params, query_context, привязки к дашбордам.
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_chart_list.
+        Returns all settings: viz_type, params, query_context, dashboard bindings.
+        IMPORTANT: if the ID is unknown, call superset_chart_list first.
 
         Args:
-            chart_id: ID графика (целое число из результата chart_list).
+            chart_id: Chart ID (integer from chart_list result).
         """
         result = await client.get(f"/api/v1/chart/{chart_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -293,115 +313,116 @@ def register_chart_tools(mcp):
         query_context: str | None = None,
         dashboards: list[int] | None = None,
     ) -> str:
-        """Создать новый график (chart).
+        """Create a new chart.
 
         Args:
-            slice_name: Название графика (отображается в UI).
-            viz_type: Тип визуализации (Superset 6.x). Основные типы:
-                ECharts (рекомендуемые):
-                - echarts_timeseries_bar — столбчатая/горизонтальная диаграмма
-                - echarts_timeseries_line — линейный график
-                - echarts_timeseries_smooth — сглаженная линия
-                - echarts_timeseries_step — ступенчатая линия
-                - echarts_timeseries_scatter — точечная диаграмма
-                - echarts_area — площадная диаграмма
-                - mixed_timeseries — несколько серий с 2 осями Y
-                - pie — круговая диаграмма
-                - funnel — воронка
-                - gauge_chart — спидометр/шкала
-                - radar — радарная диаграмма
-                - graph_chart — граф/сеть
-                - tree_chart — дерево
-                - treemap_v2 — древовидная карта
-                - sunburst_v2 — солнечная диаграмма
-                - sankey_v2 — диаграмма Санкей
-                - heatmap_v2 — тепловая карта
-                - histogram_v2 — гистограмма
-                - box_plot — ящик с усами
-                - bubble_v2 — пузырьковая диаграмма
-                - waterfall — водопадная диаграмма
-                - gantt_chart — диаграмма Ганта
+            slice_name: Chart name (displayed in the UI).
+            viz_type: Visualization type (Superset 6.x). Main types:
+                ECharts (recommended):
+                - echarts_timeseries_bar — bar/horizontal bar chart
+                - echarts_timeseries_line — line chart
+                - echarts_timeseries_smooth — smoothed line
+                - echarts_timeseries_step — step line
+                - echarts_timeseries_scatter — scatter plot
+                - echarts_area — area chart
+                - mixed_timeseries — multiple series with 2 Y-axes
+                - pie — pie chart
+                - funnel — funnel chart
+                - gauge_chart — gauge/speedometer
+                - radar — radar chart
+                - graph_chart — graph/network
+                - tree_chart — tree diagram
+                - treemap_v2 — treemap
+                - sunburst_v2 — sunburst chart
+                - sankey_v2 — Sankey diagram
+                - heatmap_v2 — heatmap
+                - histogram_v2 — histogram
+                - box_plot — box plot
+                - bubble_v2 — bubble chart
+                - waterfall — waterfall chart
+                - gantt_chart — Gantt chart
                 KPI:
-                - big_number_total — большое число (KPI)
-                - big_number — KPI с трендом
-                Таблицы:
-                - table — таблица
-                - pivot_table_v2 — сводная таблица
-                Карты:
-                - country_map — карта страны (ISO 3166-2 коды)
-                - world_map — карта мира
-                Другие:
-                - word_cloud — облако слов
-                - handlebars — кастомный шаблон
-                DEPRECATED (НЕ ИСПОЛЬЗОВАТЬ — ошибка "not registered"):
-                  dist_bar → echarts_timeseries_bar, bar → echarts_timeseries_bar,
-                  area → echarts_area, line → echarts_timeseries_line,
-                  heatmap → heatmap_v2, histogram → histogram_v2,
-                  treemap → treemap_v2, sunburst → sunburst_v2,
-                  sankey → sankey_v2, pivot_table → pivot_table_v2,
-                  dual_line → mixed_timeseries, line_multi → mixed_timeseries
-            datasource_id: ID датасета (из superset_dataset_list).
-            datasource_type: Тип источника данных (по умолчанию "table" — датасет).
-            params: JSON-строка с параметрами визуализации (зависят от viz_type).
-                Определяют метрики, группировки, фильтры, цвета, подписи и т.д.
+                - big_number_total — big number (KPI)
+                - big_number — KPI with trend
+                Tables:
+                - table — table
+                - pivot_table_v2 — pivot table
+                Maps:
+                - country_map — country map (ISO 3166-2 codes)
+                - world_map — world map
+                Other:
+                - word_cloud — word cloud
+                - handlebars — custom template
+                DEPRECATED (DO NOT USE — "not registered" error):
+                  dist_bar -> echarts_timeseries_bar, bar -> echarts_timeseries_bar,
+                  area -> echarts_area, line -> echarts_timeseries_line,
+                  heatmap -> heatmap_v2, histogram -> histogram_v2,
+                  treemap -> treemap_v2, sunburst -> sunburst_v2,
+                  sankey -> sankey_v2, pivot_table -> pivot_table_v2,
+                  dual_line -> mixed_timeseries, line_multi -> mixed_timeseries
+            datasource_id: Dataset ID (from superset_dataset_list).
+            datasource_type: Data source type (default "table" — dataset).
+            params: JSON string with visualization parameters (depend on viz_type).
+                Define metrics, groupings, filters, colors, labels, etc.
 
-                ВАЖНО — числовые и временные форматы:
-                  НЕ используйте SMART_NUMBER и SMART_DATE — они сокращают числа
-                  (1.61k вместо 1610) и показывают литерал вместо даты.
-                  Используйте конкретные форматы:
-                  - y_axis_format: "d" (целые без запятых), ",d" (целые с запятыми), ",.2f" (дробные)
-                  - number_format: ",d" (для pie chart)
-                  - x_axis_time_format: "%b %Y" (ось X дат), "%Y-%m-%d" (ISO)
-                  - tooltipTimeFormat: "%Y-%m-%d" или "%Y-%m" (tooltip дат)
-                  - show_value: true (показать числа на столбцах bar chart)
+                IMPORTANT — numeric and time formats:
+                  Do NOT use SMART_NUMBER or SMART_DATE — they abbreviate numbers
+                  (1.61k instead of 1610) and show literal text instead of dates.
+                  Use explicit formats:
+                  - y_axis_format: "d" (integers without separators), ",d" (with commas),
+                    ",.2f" (decimals)
+                  - number_format: ",d" (for pie chart)
+                  - x_axis_time_format: "%b %Y" (X-axis dates), "%Y-%m-%d" (ISO)
+                  - tooltipTimeFormat: "%Y-%m-%d" or "%Y-%m" (tooltip dates)
+                  - show_value: true (show numbers on bar chart columns)
 
-                КРИТИЧНО — формат дат и времени в Superset 6.x:
-                  Superset 6.x использует ТОЛЬКО D3 time format (strftime-синтаксис).
-                  НЕ используйте moment.js формат (YYYY-MM-DD) — он будет показан
-                  как литеральный текст "YYYY-MM-DD" вместо даты!
-                  Правильные форматы (D3/strftime):
-                  - "%Y-%m-%d"       → 2026-03-05 (дата ISO)
-                  - "%Y-%m-%d %H:%M" → 2026-03-05 14:30 (дата + время)
-                  - "%d.%m.%Y"       → 05.03.2026 (русский формат)
-                  - "%b %Y"          → Mar 2026 (месяц + год)
-                  - "%Y"             → 2026 (только год)
-                  - "%Y-%m"          → 2026-03 (год-месяц)
-                  НЕПРАВИЛЬНЫЕ форматы (moment.js — НЕ РАБОТАЮТ):
-                  - "YYYY-MM-DD" — покажет литерал "YYYY-MM-DD"
-                  - "DD.MM.YYYY" — покажет литерал "DD.MM.YYYY"
-                  - "MMM YYYY"   — покажет литерал "MMM YYYY"
-                  Параметры, принимающие формат дат:
-                  - table_timestamp_format (таблицы)
-                  - x_axis_time_format (ось X)
+                CRITICAL — date/time format in Superset 6.x:
+                  Superset 6.x uses ONLY D3 time format (strftime syntax).
+                  Do NOT use moment.js format (YYYY-MM-DD) — it will be rendered
+                  as literal text "YYYY-MM-DD" instead of an actual date!
+                  Correct formats (D3/strftime):
+                  - "%Y-%m-%d"       -> 2026-03-05 (ISO date)
+                  - "%Y-%m-%d %H:%M" -> 2026-03-05 14:30 (date + time)
+                  - "%d.%m.%Y"       -> 05.03.2026 (European format)
+                  - "%b %Y"          -> Mar 2026 (month + year)
+                  - "%Y"             -> 2026 (year only)
+                  - "%Y-%m"          -> 2026-03 (year-month)
+                  INCORRECT formats (moment.js — DO NOT WORK):
+                  - "YYYY-MM-DD" — renders literal "YYYY-MM-DD"
+                  - "DD.MM.YYYY" — renders literal "DD.MM.YYYY"
+                  - "MMM YYYY"   — renders literal "MMM YYYY"
+                  Parameters that accept date formats:
+                  - table_timestamp_format (tables)
+                  - x_axis_time_format (X-axis)
                   - tooltipTimeFormat (tooltip)
-                  - y_axis_format (для big_number_total с датой в метрике)
+                  - y_axis_format (for big_number_total with date in metric)
 
-                big_number_total (KPI-карточки) — ЭТАЛОННЫЕ параметры:
-                  - header_font_size: 0.27 (размер ЦИФР, ~53px в контейнере 60px)
-                  - subheader_font_size: 0.15 (размер НАДПИСИ/подзаголовка)
-                  - y_axis_format: "d" (целые числа без запятых-разделителей)
-                  ВАЖНО — скролл в KPI: контейнер big_number_total имеет фиксированную
-                  высоту (обычно 60px при 2 клетках сетки). При слишком большом шрифте
-                  появляется скролл. Виновники: font-size + line-height (1.1x) + margin-bottom
-                  (8px по умолчанию). Если используете CSS дашборда для кастомного размера
-                  шрифта — добавляйте `margin-bottom: 0 !important` к .header-line.
-                  Формула: font_size * 1.1 + margin <= container_height (60px).
-                  Рекомендуемый CSS: font-size 3.3rem (58px с line-height), margin-bottom: 0.
+                big_number_total (KPI cards) — REFERENCE parameters:
+                  - header_font_size: 0.27 (number size, ~53px in a 60px container)
+                  - subheader_font_size: 0.15 (subtitle/label size)
+                  - y_axis_format: "d" (integers without comma separators)
+                  IMPORTANT — scroll in KPI: the big_number_total container has a fixed
+                  height (usually 60px at 2 grid cells). Too large a font causes scrolling.
+                  Culprits: font-size + line-height (1.1x) + margin-bottom (8px default).
+                  If using dashboard CSS for custom font size, add
+                  `margin-bottom: 0 !important` to .header-line.
+                  Formula: font_size * 1.1 + margin <= container_height (60px).
+                  Recommended CSS: font-size 3.3rem (58px with line-height), margin-bottom: 0.
 
-                country_map — обязательные параметры:
+                country_map — required parameters:
                   - select_country: "russia"
-                  - entity: "<колонка с ISO 3166-2 кодами>"
+                  - entity: "<column with ISO 3166-2 codes>"
                   - metric: {...}
-                  Tooltip карты (класс .hover-popup) обрезается контейнером
-                  .dashboard-chart (overflow:hidden). Фикс через CSS дашборда:
+                  Map tooltip (class .hover-popup) is clipped by the container
+                  .dashboard-chart (overflow:hidden). Fix via dashboard CSS:
                   .dashboard-chart-id-{N} .dashboard-chart { overflow: visible !important; }
                   .hover-popup { z-index: 99999 !important; }
 
-            query_context: JSON-строка с контекстом запроса.
-                Необходим для работы chart_get_data. Обычно генерируется UI.
-            dashboards: Список ID дашбордов, к которым привязать график.
+            query_context: JSON string with query context.
+                Required for chart_get_data to work. Usually generated by the UI.
+            dashboards: List of dashboard IDs to bind the chart to.
         """
-        # Валидация: deprecated viz_type и moment.js форматы
+        # Validation: deprecated viz_type and moment.js formats
         validation_error = _validate_chart_params(params, viz_type)
         if validation_error:
             return json.dumps({"error": validation_error}, ensure_ascii=False)
@@ -423,7 +444,7 @@ def register_chart_tools(mcp):
             payload["dashboards"] = dashboards
         result = await client.post("/api/v1/chart/", json_data=payload)
 
-        # Авто-синхронизация: добавляем datasource_access ролям дашбордов
+        # Auto-sync: add datasource_access to dashboard roles
         new_id = result.get("id")
         if new_id:
             sync = await auto_sync_chart_dashboards(client, chart_id=new_id, datasource_id=datasource_id)
@@ -443,40 +464,40 @@ def register_chart_tools(mcp):
         dashboards: list[int] | None = None,
         confirm_params_replace: bool = False,
     ) -> str:
-        """Обновить существующий график. Передавайте только изменяемые поля.
+        """Update an existing chart. Pass only the fields to change.
 
         Args:
-            chart_id: ID графика для обновления.
-            slice_name: Новое название.
-            viz_type: Новый тип визуализации (см. chart_create для списка типов).
-            params: Новые JSON-параметры визуализации (перезаписывают полностью).
-                См. chart_create для справки по числовым/временным форматам.
-                ВАЖНО: params перезаписывает ВСЕ параметры — сначала получите текущие
-                через chart_get, измените нужные поля и передайте полный JSON.
-                КРИТИЧНО: для дат используйте D3 strftime-формат ("%Y-%m-%d"),
-                НЕ moment.js ("YYYY-MM-DD") — иначе будет показан литерал!
-            query_context: Новый JSON query context (перезаписывает полностью).
-                ВАЖНО: при изменении params нужно обновить и query_context,
-                иначе чарт будет использовать старый контекст запроса.
-            dashboards: Новый список ID дашбордов (ЗАМЕНЯЕТ все привязки).
-            confirm_params_replace: Подтверждение замены params (ОБЯЗАТЕЛЬНО при params).
+            chart_id: ID of the chart to update.
+            slice_name: New name.
+            viz_type: New visualization type (see chart_create for the list of types).
+            params: New JSON visualization parameters (replaces entirely).
+                See chart_create for reference on numeric/time formats.
+                IMPORTANT: params replaces ALL parameters — first get current ones
+                via chart_get, modify the needed fields, and pass the full JSON.
+                CRITICAL: for dates use D3 strftime format ("%Y-%m-%d"),
+                NOT moment.js ("YYYY-MM-DD") — otherwise a literal will be shown!
+            query_context: New JSON query context (replaces entirely).
+                IMPORTANT: when changing params you should also update query_context,
+                otherwise the chart will use the old query context.
+            dashboards: New list of dashboard IDs (REPLACES all bindings).
+            confirm_params_replace: Confirmation for replacing params (REQUIRED when passing params).
         """
-        # Защита от частичного params
+        # Guard against partial params replacement
         if params is not None and not confirm_params_replace:
             return json.dumps(
                 {
                     "error": (
-                        "ОТКЛОНЕНО: params перезаписывает ВСЕ параметры чарта. "
-                        'Если передать только изменяемый параметр (напр. {"y_axis_format": "d"}), '
-                        "все остальные настройки (metrics, groupby, filters, цвета) будут УНИЧТОЖЕНЫ. "
-                        "Сначала получите текущие через chart_get, измените нужные поля, "
-                        "передайте ПОЛНЫЙ JSON с confirm_params_replace=True."
+                        "REJECTED: params replaces ALL chart parameters. "
+                        'If you pass only the changed parameter (e.g. {"y_axis_format": "d"}), '
+                        "all other settings (metrics, groupby, filters, colors) will be DESTROYED. "
+                        "First get the current params via chart_get, modify the needed fields, "
+                        "then pass the FULL JSON with confirm_params_replace=True."
                     )
                 },
                 ensure_ascii=False,
             )
 
-        # Валидация: deprecated viz_type и moment.js форматы
+        # Validation: deprecated viz_type and moment.js formats
         validation_error = _validate_chart_params(params, viz_type)
         if validation_error:
             return json.dumps({"error": validation_error}, ensure_ascii=False)
@@ -497,7 +518,7 @@ def register_chart_tools(mcp):
             payload["dashboards"] = dashboards
         result = await client.put(f"/api/v1/chart/{chart_id}", json_data=payload)
 
-        # Авто-синхронизация: при изменении dashboards или datasource
+        # Auto-sync: when dashboards or datasource change
         if dashboards is not None:
             sync = await auto_sync_chart_dashboards(client, chart_id=chart_id)
             synced = [s for s in sync if s.get("synced_roles")]
@@ -511,11 +532,11 @@ def register_chart_tools(mcp):
         chart_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить график по ID. График будет удалён со всех дашбордов.
+        """Delete a chart by ID. The chart will be removed from all dashboards.
 
         Args:
-            chart_id: ID графика для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            chart_id: ID of the chart to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -527,10 +548,10 @@ def register_chart_tools(mcp):
             except Exception:
                 chart_name = f"ID={chart_id}"
                 dash_names = []
-            msg = f"ОТКЛОНЕНО: удаление чарта '{chart_name}' (ID={chart_id})"
+            msg = f"REJECTED: deletion of chart '{chart_name}' (ID={chart_id})"
             if dash_names:
-                msg += f", привязан к дашбордам: {dash_names}"
-            msg += ". Передайте confirm_delete=True для подтверждения."
+                msg += f", bound to dashboards: {dash_names}"
+            msg += ". Pass confirm_delete=True to confirm."
             return json.dumps({"error": msg}, ensure_ascii=False)
 
         result = await client.delete(f"/api/v1/chart/{chart_id}")
@@ -540,13 +561,13 @@ def register_chart_tools(mcp):
     async def superset_chart_data(
         query_context: str,
     ) -> str:
-        """Выполнить произвольный запрос к датасету и получить данные.
+        """Execute an arbitrary query against a dataset and retrieve data.
 
-        Позволяет получить данные напрямую из датасета, без создания графика.
-        Для получения данных существующего графика используйте chart_get_data.
+        Allows fetching data directly from a dataset without creating a chart.
+        To get data from an existing chart, use chart_get_data instead.
 
         Args:
-            query_context: JSON-строка с контекстом запроса. Формат:
+            query_context: JSON string with the query context. Format:
                 {
                     "datasource": {"id": <dataset_id>, "type": "table"},
                     "queries": [{
@@ -561,9 +582,9 @@ def register_chart_tools(mcp):
                     "result_format": "json",
                     "result_type": "full"
                 }
-                ВАЖНО: time_range указывается НА УРОВНЕ query, НЕ внутри extras.
-                Допустимые time_range: "Last day", "Last week", "Last month",
-                "Last year", "No filter", или "2024-01-01 : 2024-12-31".
+                IMPORTANT: time_range is specified at the QUERY level, NOT inside extras.
+                Allowed time_range values: "Last day", "Last week", "Last month",
+                "Last year", "No filter", or "2024-01-01 : 2024-12-31".
         """
         payload = json.loads(query_context)
         result = await client.post("/api/v1/chart/data", json_data=payload)
@@ -571,14 +592,14 @@ def register_chart_tools(mcp):
 
     @mcp.tool
     async def superset_chart_get_data(chart_id: int) -> str:
-        """Получить данные конкретного сохранённого графика по его ID.
+        """Get data from a specific saved chart by its ID.
 
-        ВАЖНО: работает только если график был сохранён с query_context
-        (обычно после открытия и сохранения через Superset UI). Если query_context
-        отсутствует — используйте superset_chart_data с ручным формированием запроса.
+        IMPORTANT: works only if the chart was saved with query_context
+        (usually after opening and saving via the Superset UI). If query_context
+        is missing, use superset_chart_data with a manually constructed query.
 
         Args:
-            chart_id: ID графика.
+            chart_id: Chart ID.
         """
         result = await client.get(f"/api/v1/chart/{chart_id}/data/")
         return json.dumps(result, ensure_ascii=False)
@@ -587,13 +608,13 @@ def register_chart_tools(mcp):
     async def superset_chart_export(
         chart_ids: str,
     ) -> str:
-        """Экспортировать графики со всеми зависимостями (датасеты, БД) в ZIP.
+        """Export charts with all dependencies (datasets, databases) as a ZIP file.
 
-        Результат — base64-кодированный ZIP-файл. Можно импортировать обратно
-        через superset_chart_import.
+        The result is a base64-encoded ZIP file. It can be imported back
+        via superset_chart_import.
 
         Args:
-            chart_ids: ID графиков через запятую (напр. "1,2,3").
+            chart_ids: Chart IDs separated by commas (e.g. "1,2,3").
 
         Returns:
             JSON: {"format": "zip", "encoding": "base64", "data": "...", "size_bytes": N}
@@ -615,13 +636,13 @@ def register_chart_tools(mcp):
         file_path: str,
         overwrite: bool = False,
     ) -> str:
-        """Импортировать графики из ZIP-файла (созданного через export).
+        """Import charts from a ZIP file (created via export).
 
-        ZIP должен содержать YAML-файлы с конфигурацией графиков и зависимостей.
+        The ZIP must contain YAML files with chart configurations and dependencies.
 
         Args:
-            file_path: Абсолютный путь к ZIP-файлу на диске.
-            overwrite: Перезаписать существующие объекты с такими же UUID (по умолчанию False).
+            file_path: Absolute path to the ZIP file on disk.
+            overwrite: Overwrite existing objects with the same UUID (default False).
         """
         with open(file_path, "rb") as f:
             files = {"formData": (file_path.split("/")[-1], f, "application/zip")}
@@ -639,15 +660,15 @@ def register_chart_tools(mcp):
         slice_name: str,
         dashboards: list[int] | None = None,
     ) -> str:
-        """Создать копию существующего графика с новым названием.
+        """Create a copy of an existing chart with a new name.
 
-        Копирует все параметры визуализации, тип, датасет, query_context.
-        Привязки к дашбордам НЕ копируются — указывайте новые через параметр dashboards.
+        Copies all visualization parameters, type, dataset, and query_context.
+        Dashboard bindings are NOT copied — specify new ones via the dashboards parameter.
 
         Args:
-            chart_id: ID исходного графика для копирования.
-            slice_name: Название новой копии.
-            dashboards: Список ID дашбордов для привязки копии (опционально).
+            chart_id: ID of the source chart to copy.
+            slice_name: Name for the new copy.
+            dashboards: List of dashboard IDs to bind the copy to (optional).
         """
         source = await client.get(f"/api/v1/chart/{chart_id}")
         chart = source.get("result", {})
@@ -677,13 +698,13 @@ def register_chart_tools(mcp):
         chart_id: int,
         dashboard_id: int | None = None,
     ) -> str:
-        """Предзаполнить кеш графика (warm up cache).
+        """Warm up the cache for a chart.
 
-        Полезно для ускорения загрузки часто используемых графиков.
+        Useful for speeding up loading of frequently used charts.
 
         Args:
-            chart_id: ID графика для предзагрузки.
-            dashboard_id: ID дашборда для контекста фильтров (опционально).
+            chart_id: ID of the chart to warm up.
+            dashboard_id: Dashboard ID for filter context (optional).
         """
         payload = {"chart_id": chart_id}
         if dashboard_id is not None:

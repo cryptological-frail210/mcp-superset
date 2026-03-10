@@ -1,4 +1,4 @@
-"""Инструменты для управления тегами в Superset."""
+"""Tools for managing tags in Superset."""
 
 import json
 
@@ -13,18 +13,18 @@ def register_tag_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список тегов Superset.
+        """List Superset tags.
 
-        Теги используются для группировки и организации дашбордов, графиков, датасетов.
-        ВАЖНО: всегда вызывайте перед tag_get/tag_update, чтобы узнать актуальные ID.
-        При создании тега API возвращает {} без ID — используйте tag_list для получения ID.
+        Tags are used to group and organize dashboards, charts, and datasets.
+        IMPORTANT: always call before tag_get/tag_update to find current IDs.
+        When creating a tag, the API returns {} without an ID — use tag_list to get the ID.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:name,opr:ct,value:поиск)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for search. Examples:
+                - By name: (filters:!((col:name,opr:ct,value:search_term)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -40,12 +40,12 @@ def register_tag_tools(mcp):
 
     @mcp.tool
     async def superset_tag_get(tag_id: int) -> str:
-        """Получить информацию о теге по ID.
+        """Get tag information by ID.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_tag_list.
+        IMPORTANT: if the ID is unknown, call superset_tag_list first.
 
         Args:
-            tag_id: ID тега (целое число из результата tag_list).
+            tag_id: Tag ID (integer from tag_list result).
         """
         result = await client.get(f"/api/v1/tag/{tag_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -56,21 +56,21 @@ def register_tag_tools(mcp):
         description: str | None = None,
         objects_to_tag: str | None = None,
     ) -> str:
-        """Создать новый тег и опционально привязать к объектам Superset.
+        """Create a new tag and optionally attach it to Superset objects.
 
-        ВАЖНО: Superset API возвращает {} при создании (без ID тега).
-        Для получения ID нового тега вызовите superset_tag_list после создания.
+        IMPORTANT: Superset API returns {} on creation (without tag ID).
+        To get the new tag's ID, call superset_tag_list after creation.
 
-        Привязка к объектам возможна ТОЛЬКО при создании через objects_to_tag.
-        Прямые эндпоинты привязки (POST/DELETE /api/v1/tag/{type}/{id}/) не работают в 6.0.1.
+        Object attachment is only possible during creation via objects_to_tag.
+        Direct attachment endpoints (POST/DELETE /api/v1/tag/{type}/{id}/) do not work in 6.0.1.
 
         Args:
-            name: Название тега.
-            description: Описание тега (опционально).
-            objects_to_tag: JSON-строка со списком объектов для тегирования. Формат:
+            name: Tag name.
+            description: Tag description (optional).
+            objects_to_tag: JSON string with a list of objects to tag. Format:
                 [["dashboard", 1], ["chart", 5], ["dataset", 3], ["saved_query", 2]]
-                Каждый элемент — пара [тип_объекта, id_объекта].
-                Допустимые типы: "dashboard", "chart", "dataset", "saved_query".
+                Each element is a pair [object_type, object_id].
+                Allowed types: "dashboard", "chart", "dataset", "saved_query".
         """
         payload = {"name": name}
         if description is not None:
@@ -86,15 +86,15 @@ def register_tag_tools(mcp):
         name: str,
         description: str | None = None,
     ) -> str:
-        """Обновить тег (переименовать или изменить описание).
+        """Update a tag (rename or change description).
 
-        ВАЖНО: поле name ОБЯЗАТЕЛЬНО в Superset 6.0.1 — даже если название не меняется,
-        его нужно передать. Без него Superset вернёт 500.
+        IMPORTANT: the name field is REQUIRED in Superset 6.0.1 — even if the name is not
+        changing, it must be provided. Without it, Superset returns 500.
 
         Args:
-            tag_id: ID тега для обновления.
-            name: Название тега (ОБЯЗАТЕЛЬНО, даже если не меняется).
-            description: Новое описание (опционально).
+            tag_id: Tag ID to update.
+            name: Tag name (REQUIRED, even if unchanged).
+            description: New description (optional).
         """
         payload = {"name": name}
         if description is not None:
@@ -107,11 +107,11 @@ def register_tag_tools(mcp):
         tag_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить тег. Привязки к объектам будут удалены.
+        """Delete a tag. All object attachments will be removed.
 
         Args:
-            tag_id: ID тега для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            tag_id: Tag ID to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -122,9 +122,9 @@ def register_tag_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление тега '{name}' (ID={tag_id}) "
-                        f"и всех его привязок к объектам. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deletion of tag '{name}' (ID={tag_id}) "
+                        f"and all its object attachments. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -140,16 +140,16 @@ def register_tag_tools(mcp):
         page_size: int = 25,
         get_all: bool = False,
     ) -> str:
-        """Получить объекты, помеченные указанными тегами.
+        """Get objects tagged with the specified tags.
 
-        Возвращает дашборды, графики, датасеты и запросы с указанными тегами.
+        Returns dashboards, charts, datasets, and queries with the specified tags.
 
         Args:
-            tags: Названия тегов через запятую (напр. "analytics,production").
-                Если не указано — возвращает все помеченные объекты.
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            tags: Comma-separated tag names (e.g. "analytics,production").
+                If not specified, returns all tagged objects.
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -167,18 +167,18 @@ def register_tag_tools(mcp):
     async def superset_tag_bulk_create(
         tags: str,
     ) -> str:
-        """Массовое создание тегов с привязкой к объектам.
+        """Bulk-create tags with object attachments.
 
-        Позволяет создать несколько тегов и привязать их к объектам за один запрос.
+        Allows creating multiple tags and attaching them to objects in a single request.
 
         Args:
-            tags: JSON-строка со списком тегов. Формат:
+            tags: JSON string with a list of tags. Format:
                 [
                     {"name": "production", "objects_to_tag": [["dashboard", 1], ["chart", 5]]},
                     {"name": "analytics", "objects_to_tag": [["dataset", 3]]}
                 ]
-                objects_to_tag: пары [тип_объекта, id_объекта].
-                Допустимые типы: "dashboard", "chart", "dataset", "saved_query".
+                objects_to_tag: pairs of [object_type, object_id].
+                Allowed types: "dashboard", "chart", "dataset", "saved_query".
         """
         payload = {"tags": json.loads(tags)}
         result = await client.post("/api/v1/tag/bulk_create", json_data=payload)

@@ -1,4 +1,4 @@
-"""Инструменты для управления датасетами Superset."""
+"""Tools for managing Superset datasets."""
 
 import base64
 import json
@@ -14,19 +14,22 @@ def register_dataset_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список датасетов Superset с пагинацией.
+        """List Superset datasets with pagination.
 
-        Датасет — ссылка на таблицу/вью или виртуальный SQL-запрос в Superset.
-        ВАЖНО: всегда вызывайте перед dataset_get, чтобы узнать актуальные ID.
+        A dataset is a reference to a table/view or a virtual SQL query in Superset.
+        IMPORTANT: always call before dataset_get to discover current IDs.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:table_name,opr:ct,value:поиск)))
-                - По схеме: (filters:!((col:schema,opr:eq,value:public)))
-                - По БД: (filters:!((col:database,opr:rel_o_m,value:1)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for searching. Examples:
+                - By name: (filters:!((col:table_name,opr:ct,value:search_term)))
+                - By schema: (filters:!((col:schema,opr:eq,value:public)))
+                - By database: (filters:!((col:database,opr:rel_o_m,value:1)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
+
+        Returns:
+            JSON string with the list of datasets.
         """
         if get_all:
             params = {}
@@ -42,12 +45,15 @@ def register_dataset_tools(mcp):
 
     @mcp.tool
     async def superset_dataset_get(dataset_id: int) -> str:
-        """Получить детальную информацию о датасете: колонки, метрики, SQL.
+        """Get detailed information about a dataset: columns, metrics, SQL.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_dataset_list.
+        IMPORTANT: if the ID is unknown, call superset_dataset_list first.
 
         Args:
-            dataset_id: ID датасета (целое число из результата dataset_list).
+            dataset_id: Dataset ID (integer from dataset_list result).
+
+        Returns:
+            JSON string with dataset details.
         """
         result = await client.get(f"/api/v1/dataset/{dataset_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -59,17 +65,19 @@ def register_dataset_tools(mcp):
         schema_name: str | None = None,
         sql: str | None = None,
     ) -> str:
-        """Создать новый датасет (физический или виртуальный).
+        """Create a new dataset (physical or virtual).
 
-        Физический датасет — ссылка на существующую таблицу/вью в БД.
-        Виртуальный датасет — произвольный SQL-запрос как источник данных.
+        A physical dataset references an existing table/view in the database.
+        A virtual dataset uses an arbitrary SQL query as the data source.
 
         Args:
-            table_name: Название таблицы/вью (для физического) или название датасета (для виртуального).
-            database: ID подключения к БД (из superset_database_list).
-            schema_name: Схема БД (напр. "public", "source"). Если не указана — default-схема БД.
-            sql: SQL-запрос для виртуального датасета. Если указан, создаётся
-                виртуальный датасет на основе этого запроса.
+            table_name: Table/view name (for physical) or dataset name (for virtual).
+            database: Database connection ID (from superset_database_list).
+            schema_name: Database schema (e.g. "public", "source"). If omitted, uses the DB default schema.
+            sql: SQL query for a virtual dataset. If provided, creates a virtual dataset based on this query.
+
+        Returns:
+            JSON string with the created dataset details.
         """
         payload = {"table_name": table_name, "database": database}
         if schema_name is not None:
@@ -89,34 +97,37 @@ def register_dataset_tools(mcp):
         metrics: str | None = None,
         confirm_columns_replace: bool = False,
     ) -> str:
-        """Обновить датасет. Передавайте только изменяемые поля.
+        """Update a dataset. Only pass the fields you want to change.
 
         Args:
-            dataset_id: ID датасета для обновления.
-            table_name: Новое название таблицы/датасета.
-            sql: Новый SQL-запрос (только для виртуального датасета).
-            description: Описание датасета (отображается в Superset UI).
-            columns: JSON-строка с описанием колонок.
-                КРИТИЧНО: передача columns ЗАМЕНЯЕТ ВСЕ колонки датасета!
-                Для обновления одной колонки (напр. verbose_name) — передавайте
-                ВСЕ колонки с их ID. После ошибки — dataset_refresh_schema восстановит.
-                Формат: [{"id": 123, "column_name": "id", "type": "INTEGER", ...}]
-            metrics: JSON-строка с описанием метрик. Формат:
+            dataset_id: ID of the dataset to update.
+            table_name: New table/dataset name.
+            sql: New SQL query (only for virtual datasets).
+            description: Dataset description (displayed in Superset UI).
+            columns: JSON string describing columns.
+                CRITICAL: passing columns REPLACES ALL dataset columns!
+                To update a single column (e.g. verbose_name), pass ALL columns with their IDs.
+                After an error, dataset_refresh_schema will restore columns from SQL.
+                Format: [{"id": 123, "column_name": "id", "type": "INTEGER", ...}]
+            metrics: JSON string describing metrics. Format:
                 [{"metric_name": "count", "expression": "COUNT(*)", "metric_type": "count"}]
-            confirm_columns_replace: Подтверждение замены ВСЕХ колонок (ОБЯЗАТЕЛЬНО при columns).
+            confirm_columns_replace: Confirmation for replacing ALL columns (REQUIRED when passing columns).
+
+        Returns:
+            JSON string with the updated dataset details.
         """
-        # Защита от случайной потери колонок
+        # Guard against accidental column loss
         if columns is not None and not confirm_columns_replace:
             return json.dumps(
                 {
                     "error": (
-                        "ОТКЛОНЕНО: передан columns без confirm_columns_replace=True. "
-                        "Superset PUT /dataset/{id} с полем columns ЗАМЕНЯЕТ ВСЕ колонки "
-                        "датасета списком из параметра. Для обновления одной колонки "
-                        "(напр. verbose_name) — передавайте ВСЕ колонки с их ID. "
-                        "Сначала получите текущие колонки через dataset_get, "
-                        "затем передайте полный список с confirm_columns_replace=True. "
-                        "При ошибке — dataset_refresh_schema восстановит колонки из SQL."
+                        "REJECTED: columns provided without confirm_columns_replace=True. "
+                        "Superset PUT /dataset/{id} with the columns field REPLACES ALL dataset "
+                        "columns with the provided list. To update a single column "
+                        "(e.g. verbose_name), pass ALL columns with their IDs. "
+                        "First retrieve current columns via dataset_get, "
+                        "then pass the full list with confirm_columns_replace=True. "
+                        "On error, dataset_refresh_schema will restore columns from SQL."
                     )
                 },
                 ensure_ascii=False,
@@ -138,12 +149,15 @@ def register_dataset_tools(mcp):
 
     @mcp.tool
     async def superset_dataset_refresh_schema(dataset_id: int) -> str:
-        """Обновить схему датасета из источника (пересканировать колонки и типы).
+        """Refresh the dataset schema from the source (rescan columns and types).
 
-        Полезно после ALTER TABLE или изменения структуры таблицы в БД.
+        Useful after ALTER TABLE or any structural change to the underlying table.
 
         Args:
-            dataset_id: ID датасета.
+            dataset_id: Dataset ID.
+
+        Returns:
+            JSON string with the refresh result.
         """
         result = await client.put(f"/api/v1/dataset/{dataset_id}/refresh", json_data={})
         return json.dumps(result, ensure_ascii=False)
@@ -153,13 +167,16 @@ def register_dataset_tools(mcp):
         dataset_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить датасет. Графики, использующие этот датасет, перестанут работать.
+        """Delete a dataset. Charts using this dataset will stop working.
 
-        КРИТИЧНО: удаление датасета ломает все привязанные чарты и дашборды.
+        CRITICAL: deleting a dataset breaks all linked charts and dashboards.
 
         Args:
-            dataset_id: ID датасета для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            dataset_id: ID of the dataset to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
+
+        Returns:
+            JSON string with the deletion result.
         """
         if not confirm_delete:
             try:
@@ -174,9 +191,9 @@ def register_dataset_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление датасета '{ds_name}' (ID={dataset_id}) "
-                        f"сломает {charts_count} чартов и {dashboards_count} дашбордов. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deleting dataset '{ds_name}' (ID={dataset_id}) "
+                        f"will break {charts_count} charts and {dashboards_count} dashboards. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -190,12 +207,15 @@ def register_dataset_tools(mcp):
         base_model_id: int,
         table_name: str,
     ) -> str:
-        """Создать копию существующего датасета (с колонками и метриками).
+        """Create a copy of an existing dataset (with columns and metrics).
 
         Args:
-            base_model_id: ID исходного датасета для копирования.
-                ВАЖНО: поле называется base_model_id, НЕ base_id и НЕ dataset_id.
-            table_name: Название нового датасета (должно быть уникальным).
+            base_model_id: ID of the source dataset to copy.
+                IMPORTANT: the field is called base_model_id, NOT base_id or dataset_id.
+            table_name: Name for the new dataset (must be unique).
+
+        Returns:
+            JSON string with the duplicated dataset details.
         """
         result = await client.post(
             "/api/v1/dataset/duplicate",
@@ -205,12 +225,15 @@ def register_dataset_tools(mcp):
 
     @mcp.tool
     async def superset_dataset_related_objects(dataset_id: int) -> str:
-        """Получить объекты, связанные с датасетом (графики и дашборды).
+        """Get objects related to a dataset (charts and dashboards).
 
-        Полезно перед удалением датасета, чтобы понять, что сломается.
+        Useful before deleting a dataset to understand the impact.
 
         Args:
-            dataset_id: ID датасета.
+            dataset_id: Dataset ID.
+
+        Returns:
+            JSON string with related charts and dashboards.
         """
         result = await client.get(f"/api/v1/dataset/{dataset_id}/related_objects")
         return json.dumps(result, ensure_ascii=False)
@@ -219,12 +242,12 @@ def register_dataset_tools(mcp):
     async def superset_dataset_export(
         dataset_ids: str,
     ) -> str:
-        """Экспортировать датасеты с зависимостями (БД) в ZIP-файл.
+        """Export datasets with dependencies (databases) to a ZIP file.
 
-        Результат — base64-кодированный ZIP. Можно импортировать через dataset_import.
+        The result is a base64-encoded ZIP. Can be imported via dataset_import.
 
         Args:
-            dataset_ids: ID датасетов через запятую (напр. "1,2,3").
+            dataset_ids: Comma-separated dataset IDs (e.g. "1,2,3").
 
         Returns:
             JSON: {"format": "zip", "encoding": "base64", "data": "...", "size_bytes": N}
@@ -246,11 +269,14 @@ def register_dataset_tools(mcp):
         file_path: str,
         overwrite: bool = False,
     ) -> str:
-        """Импортировать датасеты из ZIP-файла (созданного через export).
+        """Import datasets from a ZIP file (created via export).
 
         Args:
-            file_path: Абсолютный путь к ZIP-файлу на диске.
-            overwrite: Перезаписать существующие объекты с такими же UUID (по умолчанию False).
+            file_path: Absolute path to the ZIP file on disk.
+            overwrite: Overwrite existing objects with matching UUIDs (default False).
+
+        Returns:
+            JSON string with the import result.
         """
         with open(file_path, "rb") as f:
             files = {"formData": (file_path.split("/")[-1], f, "application/zip")}
@@ -268,15 +294,18 @@ def register_dataset_tools(mcp):
         table_name: str,
         schema_name: str | None = None,
     ) -> str:
-        """Получить существующий датасет или создать новый для таблицы.
+        """Get an existing dataset or create a new one for a table.
 
-        Если датасет на указанную таблицу уже существует — возвращает его.
-        Если нет — создаёт новый физический датасет.
+        If a dataset for the specified table already exists, returns it.
+        If not, creates a new physical dataset.
 
         Args:
-            database_id: ID подключения к БД (из superset_database_list).
-            table_name: Название таблицы в БД.
-            schema_name: Схема БД (напр. "public", "source"). Если не указана — default-схема.
+            database_id: Database connection ID (from superset_database_list).
+            table_name: Table name in the database.
+            schema_name: Database schema (e.g. "public", "source"). If omitted, uses the DB default schema.
+
+        Returns:
+            JSON string with the dataset details.
         """
         payload = {"database_id": database_id, "table_name": table_name}
         if schema_name is not None:

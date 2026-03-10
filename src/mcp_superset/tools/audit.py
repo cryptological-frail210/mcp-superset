@@ -1,4 +1,4 @@
-"""Инструмент аудита прав доступа — матрица пользователь × ресурсы."""
+"""Access rights audit tool — user x resources permission matrix."""
 
 import json
 import re
@@ -6,12 +6,12 @@ from typing import Any
 
 
 async def _build_role_permissions_map(client: Any) -> dict[int, set[int]]:
-    """Строит маппинг role_id → set(permission_view_menu_id).
+    """Build a mapping of role_id to set(permission_view_menu_id).
 
-    Загружает permissions для всех ролей за один проход.
+    Loads permissions for all roles in a single pass.
     """
     role_perms: dict[int, set[int]] = {}
-    # Получаем все роли
+    # Fetch all roles
     roles_resp = await client.get_all("/api/v1/security/roles/")
     for role in roles_resp.get("result", []):
         role_id = role["id"]
@@ -30,7 +30,7 @@ async def _build_role_permissions_map(client: Any) -> dict[int, set[int]]:
 
 
 async def _build_datasource_access_map(client: Any) -> dict[int, int]:
-    """Строит маппинг dataset_id → permission_view_menu_id для datasource_access."""
+    """Build a mapping of dataset_id to permission_view_menu_id for datasource_access."""
     ds_perm: dict[int, int] = {}
     page = 0
     while page < 50:
@@ -48,7 +48,7 @@ async def _build_datasource_access_map(client: Any) -> dict[int, int]:
             perm_name = item.get("permission", {}).get("name", "")
             view_name = item.get("view_menu", {}).get("name", "")
             if perm_name == "datasource_access":
-                # Извлекаем dataset_id из view_name вида "[DB].[table](id:N)"
+                # Extract dataset_id from view_name like "[DB].[table](id:N)"
                 match = re.search(r"\(id:(\d+)\)", view_name)
                 if match:
                     ds_id = int(match.group(1))
@@ -60,6 +60,7 @@ async def _build_datasource_access_map(client: Any) -> dict[int, int]:
 
 
 def register_audit_tools(mcp):
+    """Register audit tools with the MCP server."""
     from mcp_superset.server import superset_client as client
 
     @mcp.tool
@@ -69,34 +70,34 @@ def register_audit_tools(mcp):
         username_filter: str | None = None,
         include_admin: bool = False,
     ) -> str:
-        """Аудит прав доступа: матрица пользователь × дашборды/датасеты/RLS.
+        """Audit access rights: user x dashboards/datasets/RLS permission matrix.
 
-        Для каждого пользователя показывает:
-        - Группы, в которых он состоит
-        - Эффективные роли (прямые + из групп)
-        - Доступ к каждому дашборду (1/0) — на основе datasource_access
-        - Доступ к каждому датасету (1/0)
-        - Доступные регионы через RLS
+        For each user shows:
+        - Groups they belong to
+        - Effective roles (direct + inherited from groups)
+        - Access to each dashboard (1/0) — based on datasource_access
+        - Access to each dataset (1/0)
+        - Available regions via RLS
 
         Args:
-            page: Страница результатов (начиная с 0).
-            page_size: Пользователей на странице (макс. 50).
-            username_filter: Фильтр по username (подстрока).
-            include_admin: Включать Admin-пользователей (у них доступ ко всему).
+            page: Results page (starting from 0).
+            page_size: Users per page (max 50).
+            username_filter: Filter by username (substring match).
+            include_admin: Include Admin users (they have access to everything).
         """
         page_size = min(page_size, 50)
 
-        # === 1. Собираем все данные параллельно ===
+        # === 1. Collect all data ===
 
-        # Пользователи
+        # Users
         users_resp = await client.get_all("/api/v1/security/users/")
         all_users = users_resp.get("result", [])
 
-        # Группы (с ролями и пользователями)
+        # Groups (with roles and users)
         groups_resp = await client.get_all("/api/v1/security/groups/")
         all_groups_list = groups_resp.get("result", [])
 
-        # Детали групп (list не возвращает users/roles полностью)
+        # Group details (list doesn't return full users/roles)
         groups_detail: dict[int, dict] = {}
         for g in all_groups_list:
             gid = g.get("id")
@@ -107,15 +108,15 @@ def register_audit_tools(mcp):
                 except Exception:
                     groups_detail[gid] = g
 
-        # Дашборды
+        # Dashboards
         dashboards_resp = await client.get_all("/api/v1/dashboard/")
         all_dashboards = dashboards_resp.get("result", [])
 
-        # Датасеты
+        # Datasets
         datasets_resp = await client.get_all("/api/v1/dataset/")
         all_datasets = datasets_resp.get("result", [])
 
-        # Маппинг дашборд → датасеты (через charts)
+        # Mapping dashboard -> datasets (via charts)
         dashboard_datasets: dict[int, set[int]] = {}
         for db in all_dashboards:
             db_id = db["id"]
@@ -129,21 +130,21 @@ def register_audit_tools(mcp):
             except Exception:
                 dashboard_datasets[db_id] = set()
 
-        # Role → permissions
+        # Role -> permissions
         role_perms_map = await _build_role_permissions_map(client)
 
-        # Dataset → datasource_access permission_view_menu_id
+        # Dataset -> datasource_access permission_view_menu_id
         ds_access_map = await _build_datasource_access_map(client)
 
-        # RLS-правила
+        # RLS rules
         rls_resp = await client.get_all("/api/v1/rowlevelsecurity/")
         all_rls = rls_resp.get("result", [])
 
-        # === 2. Построение вспомогательных структур ===
+        # === 2. Build helper structures ===
 
-        # Группы пользователя: user_id → [{name, roles: [role_id]}]
+        # User's groups: user_id -> [{name, roles: [role_id]}]
         user_groups: dict[int, list[dict]] = {}
-        # Роли из групп: user_id → set(role_id)
+        # Roles from groups: user_id -> set(role_id)
         user_group_roles: dict[int, set[int]] = {}
         for gid, gdata in groups_detail.items():
             g_name = gdata.get("name", "?")
@@ -161,12 +162,12 @@ def register_audit_tools(mcp):
                 )
                 user_group_roles[uid] |= g_roles
 
-        # RLS: role_id → список регионов
+        # RLS: role_id -> list of regions
         role_rls_regions: dict[int, list[str]] = {}
         for rule in all_rls:
             clause = rule.get("clause", "")
             roles = rule.get("roles", [])
-            # Извлекаем регион из clause типа "operation_region = 'Московская'"
+            # Extract region from clause like "operation_region = 'Moscow'"
             region_match = re.search(r"operation_region\s*=\s*'([^']+)'", clause)
             if clause == "1=1":
                 region = "_all_"
@@ -182,15 +183,15 @@ def register_audit_tools(mcp):
                     role_rls_regions[rid] = []
                 role_rls_regions[rid].append(region)
 
-        # Имена ролей
+        # Role names
         roles_resp_all = await client.get_all("/api/v1/security/roles/")
         role_names: dict[int, str] = {r["id"]: r["name"] for r in roles_resp_all.get("result", [])}
 
-        # Названия дашбордов и датасетов
+        # Dashboard and dataset names
         dashboard_info = {d["id"]: d.get("dashboard_title", d.get("slug", f"id:{d['id']}")) for d in all_dashboards}
         dataset_info = {d["id"]: d.get("table_name", f"id:{d['id']}") for d in all_datasets}
 
-        # === 3. Фильтрация пользователей ===
+        # === 3. Filter users ===
 
         filtered_users = all_users
         if not include_admin:
@@ -205,24 +206,24 @@ def register_audit_tools(mcp):
         end = start + page_size
         page_users = filtered_users[start:end]
 
-        # === 4. Матрица доступа ===
+        # === 4. Access matrix ===
 
         audit_rows = []
         for user in page_users:
             uid = user["id"]
             uname = user.get("username", "?")
 
-            # Эффективные роли = прямые + из групп
+            # Effective roles = direct + from groups
             direct_role_ids = {r["id"] for r in user.get("roles", [])}
             group_role_ids = user_group_roles.get(uid, set())
             effective_role_ids = direct_role_ids | group_role_ids
 
-            # Собираем все permission_view_menu_ids пользователя
+            # Collect all permission_view_menu_ids for the user
             user_perm_ids: set[int] = set()
             for rid in effective_role_ids:
                 user_perm_ids |= role_perms_map.get(rid, set())
 
-            # Доступ к датасетам
+            # Dataset access
             datasets_access: dict[str, int] = {}
             for ds in all_datasets:
                 ds_id = ds["id"]
@@ -233,14 +234,14 @@ def register_audit_tools(mcp):
                 else:
                     datasets_access[ds_name] = 0
 
-            # Доступ к дашбордам (нужен datasource_access ко ВСЕМ датасетам)
+            # Dashboard access (requires datasource_access to ALL datasets)
             dashboards_access: dict[str, int] = {}
             for db in all_dashboards:
                 db_id = db["id"]
                 db_name = dashboard_info[db_id]
                 required_ds = dashboard_datasets.get(db_id, set())
                 if not required_ds:
-                    # Нет датасетов — доступен всем
+                    # No datasets — accessible to everyone
                     dashboards_access[db_name] = 1
                 else:
                     has_all = all(
@@ -250,28 +251,28 @@ def register_audit_tools(mcp):
                     )
                     dashboards_access[db_name] = 1 if has_all else 0
 
-            # RLS-регионы
+            # RLS regions
             rls_regions: list[str] = []
             has_deny = False
             for rid in effective_role_ids:
                 regions = role_rls_regions.get(rid, [])
                 for region in regions:
                     if region == "_all_":
-                        rls_regions = ["ВСЕ РЕГИОНЫ"]
+                        rls_regions = ["ALL REGIONS"]
                         break
                     elif region == "_deny_":
                         has_deny = True
                     elif region not in rls_regions:
                         rls_regions.append(region)
-                if rls_regions == ["ВСЕ РЕГИОНЫ"]:
+                if rls_regions == ["ALL REGIONS"]:
                     break
 
             if not rls_regions and has_deny:
-                rls_regions = ["ЗАПРЕЩЕНО (1=0)"]
+                rls_regions = ["DENIED (1=0)"]
             elif not rls_regions:
-                rls_regions = ["нет RLS"]
+                rls_regions = ["no RLS"]
 
-            # Группы пользователя
+            # User's groups
             groups_names = [g["name"] for g in user_groups.get(uid, [])]
 
             audit_rows.append(

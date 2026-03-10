@@ -1,4 +1,4 @@
-"""Регистрация всех инструментов MCP-сервера."""
+"""Registration of all MCP server tools."""
 
 from mcp_superset.tools.audit import register_audit_tools
 from mcp_superset.tools.charts import register_chart_tools
@@ -13,7 +13,7 @@ from mcp_superset.tools.tags import register_tag_tools
 
 
 def register_all_tools(mcp):
-    """Регистрирует все группы инструментов в MCP-сервере."""
+    """Register all tool groups with the MCP server."""
     register_dashboard_tools(mcp)
     register_chart_tools(mcp)
     register_database_tools(mcp)

@@ -1,4 +1,4 @@
-"""Инструменты для системных операций: отчёты, аннотации, логи, меню, assets."""
+"""Tools for system operations: reports, annotations, logs, menu, assets."""
 
 import base64
 import json
@@ -16,19 +16,19 @@ def register_system_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список отчётов и алертов Superset.
+        """List Superset reports and alerts.
 
-        Отчёты — периодическая отправка скриншотов дашбордов/графиков.
-        Алерты — уведомления при выполнении SQL-условия.
+        Reports send periodic screenshots of dashboards/charts.
+        Alerts send notifications when a SQL condition is met.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:name,opr:ct,value:поиск)))
-                - По типу: (filters:!((col:type,opr:eq,value:Report)))
-                - Активные: (filters:!((col:active,opr:eq,value:!t)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for search. Examples:
+                - By name: (filters:!((col:name,opr:ct,value:search_term)))
+                - By type: (filters:!((col:type,opr:eq,value:Report)))
+                - Active only: (filters:!((col:active,opr:eq,value:!t)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -44,12 +44,12 @@ def register_system_tools(mcp):
 
     @mcp.tool
     async def superset_report_get(report_id: int) -> str:
-        """Получить детальную информацию об отчёте/алерте по ID.
+        """Get detailed information about a report/alert by ID.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_report_list.
+        IMPORTANT: if the ID is unknown, call superset_report_list first.
 
         Args:
-            report_id: ID отчёта (целое число из результата report_list).
+            report_id: Report ID (integer from report_list result).
         """
         result = await client.get(f"/api/v1/report/{report_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -66,26 +66,26 @@ def register_system_tools(mcp):
         recipients: str | None = None,
         active: bool = True,
     ) -> str:
-        """Создать отчёт (периодическая рассылка) или алерт (по SQL-условию).
+        """Create a report (periodic delivery) or alert (SQL-condition based).
 
-        Для Report: укажите dashboard или chart — Superset будет отправлять скриншот по расписанию.
-        Для Alert: укажите database и sql — Superset проверяет условие и уведомляет при срабатывании.
+        For Report: specify dashboard or chart — Superset will send a screenshot on schedule.
+        For Alert: specify database and sql — Superset checks the condition and notifies on trigger.
 
         Args:
-            name: Название отчёта/алерта.
-            crontab: Cron-расписание. Примеры:
-                - "0 9 * * *" — каждый день в 9:00
-                - "0 9 * * 1" — каждый понедельник в 9:00
-                - "0 */6 * * *" — каждые 6 часов
-            report_type: Тип: "Report" (рассылка, по умолчанию) или "Alert" (по условию).
-            dashboard: ID дашборда для скриншота (для Report).
-            chart: ID графика для скриншота (для Report).
-            database: ID подключения к БД (для Alert — SQL-условие).
-            sql: SQL-запрос для проверки условия (для Alert).
-                Алерт срабатывает, если запрос возвращает непустой результат.
-            recipients: JSON-строка со списком получателей. Формат:
+            name: Report/alert name.
+            crontab: Cron schedule. Examples:
+                - "0 9 * * *" — every day at 9:00
+                - "0 9 * * 1" — every Monday at 9:00
+                - "0 */6 * * *" — every 6 hours
+            report_type: Type: "Report" (periodic delivery, default) or "Alert" (condition-based).
+            dashboard: Dashboard ID for screenshot (for Report).
+            chart: Chart ID for screenshot (for Report).
+            database: Database connection ID (for Alert — SQL condition).
+            sql: SQL query for condition check (for Alert).
+                The alert triggers when the query returns a non-empty result.
+            recipients: JSON string with recipient list. Format:
                 [{"type": "Email", "recipient_config_json": {"target": "user@example.com"}}]
-            active: Активен ли (по умолчанию True).
+            active: Whether active (default True).
         """
         payload = {
             "name": name,
@@ -114,14 +114,14 @@ def register_system_tools(mcp):
         active: bool | None = None,
         recipients: str | None = None,
     ) -> str:
-        """Обновить отчёт/алерт. Передавайте только изменяемые поля.
+        """Update a report/alert. Pass only the fields to change.
 
         Args:
-            report_id: ID отчёта для обновления.
-            name: Новое название.
-            crontab: Новое cron-расписание (напр. "0 9 * * *").
-            active: Включить/выключить отчёт.
-            recipients: JSON-строка с новым списком получателей (ЗАМЕНЯЕТ всех текущих).
+            report_id: Report ID to update.
+            name: New name.
+            crontab: New cron schedule (e.g. "0 9 * * *").
+            active: Enable/disable the report.
+            recipients: JSON string with new recipient list (REPLACES all current recipients).
         """
         payload = {}
         if name is not None:
@@ -140,11 +140,11 @@ def register_system_tools(mcp):
         report_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить отчёт/алерт. Рассылка будет остановлена.
+        """Delete a report/alert. The delivery schedule will be stopped.
 
         Args:
-            report_id: ID отчёта для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            report_id: Report ID to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -159,9 +159,9 @@ def register_system_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление {rtype} '{name}' "
+                        f"REJECTED: deletion of {rtype} '{name}' "
                         f"(ID={report_id}, active={active}). "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -178,15 +178,15 @@ def register_system_tools(mcp):
         page_size: int = 25,
         get_all: bool = False,
     ) -> str:
-        """Получить список слоёв аннотаций.
+        """List annotation layers.
 
-        Слой аннотаций — контейнер для аннотаций (событий на временной шкале),
-        которые можно наложить на графики.
+        An annotation layer is a container for annotations (timeline events)
+        that can be overlaid on charts.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             result = await client.get_all("/api/v1/annotation_layer/")
@@ -202,13 +202,13 @@ def register_system_tools(mcp):
         page_size: int = 25,
         get_all: bool = False,
     ) -> str:
-        """Получить список аннотаций в указанном слое.
+        """List annotations in the specified layer.
 
         Args:
-            annotation_layer_id: ID слоя аннотаций (из annotation_layer_list).
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            annotation_layer_id: Annotation layer ID (from annotation_layer_list).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             result = await client.get_all(
@@ -230,12 +230,12 @@ def register_system_tools(mcp):
         page_size: int = 25,
         get_all: bool = False,
     ) -> str:
-        """Получить недавнюю активность текущего пользователя (просмотры, редактирования).
+        """Get recent activity of the current user (views, edits).
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             result = await client.get_all("/api/v1/log/recent_activity/")
@@ -251,15 +251,15 @@ def register_system_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить журнал аудита действий всех пользователей Superset.
+        """Get the audit log of all Superset user actions.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По пользователю: (filters:!((col:user,opr:rel_o_m,value:1)))
-                - По действию: (filters:!((col:action,opr:ct,value:explore)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for search. Examples:
+                - By user: (filters:!((col:user,opr:rel_o_m,value:1)))
+                - By action: (filters:!((col:action,opr:ct,value:explore)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -277,18 +277,18 @@ def register_system_tools(mcp):
 
     @mcp.tool
     async def superset_get_menu() -> str:
-        """Получить структуру навигационного меню Superset.
+        """Get the Superset navigation menu structure.
 
-        Полезно для понимания доступных разделов и прав текущего пользователя.
+        Useful for understanding available sections and the current user's permissions.
         """
         result = await client.get("/api/v1/menu/")
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool
     async def superset_get_base_url() -> str:
-        """Получить базовый URL настроенного Superset-инстанса.
+        """Get the base URL of the configured Superset instance.
 
-        Возвращает URL, используемый MCP-сервером для подключения к Superset.
+        Returns the URL used by the MCP server to connect to Superset.
         """
         from mcp_superset.server import SUPERSET_BASE_URL
 
@@ -301,13 +301,13 @@ def register_system_tools(mcp):
         name: str,
         descr: str | None = None,
     ) -> str:
-        """Создать новый слой аннотаций.
+        """Create a new annotation layer.
 
-        Слой — контейнер для аннотаций, которые можно наложить на временные графики.
+        A layer is a container for annotations that can be overlaid on time-series charts.
 
         Args:
-            name: Название слоя.
-            descr: Описание слоя (опционально).
+            name: Layer name.
+            descr: Layer description (optional).
         """
         payload = {"name": name}
         if descr is not None:
@@ -322,12 +322,12 @@ def register_system_tools(mcp):
     async def superset_annotation_layer_get(
         annotation_layer_id: int,
     ) -> str:
-        """Получить информацию о слое аннотаций по ID.
+        """Get annotation layer information by ID.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите annotation_layer_list.
+        IMPORTANT: if the ID is unknown, call annotation_layer_list first.
 
         Args:
-            annotation_layer_id: ID слоя (из annotation_layer_list).
+            annotation_layer_id: Layer ID (from annotation_layer_list).
         """
         result = await client.get(f"/api/v1/annotation_layer/{annotation_layer_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -338,12 +338,12 @@ def register_system_tools(mcp):
         name: str | None = None,
         descr: str | None = None,
     ) -> str:
-        """Обновить слой аннотаций. Передавайте только изменяемые поля.
+        """Update an annotation layer. Pass only the fields to change.
 
         Args:
-            annotation_layer_id: ID слоя для обновления.
-            name: Новое название слоя.
-            descr: Новое описание слоя.
+            annotation_layer_id: Layer ID to update.
+            name: New layer name.
+            descr: New layer description.
         """
         payload = {}
         if name is not None:
@@ -361,13 +361,13 @@ def register_system_tools(mcp):
         annotation_layer_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить слой аннотаций вместе со всеми аннотациями внутри.
+        """Delete an annotation layer along with all its annotations.
 
-        КРИТИЧНО: удаляет слой И все аннотации в нём безвозвратно.
+        CRITICAL: deletes the layer AND all annotations within it permanently.
 
         Args:
-            annotation_layer_id: ID слоя для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            annotation_layer_id: Layer ID to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -384,9 +384,9 @@ def register_system_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление слоя аннотаций '{name}' "
-                        f"(ID={annotation_layer_id}) вместе с {ann_count} аннотациями. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deletion of annotation layer '{name}' "
+                        f"(ID={annotation_layer_id}) along with {ann_count} annotations. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -406,18 +406,18 @@ def register_system_tools(mcp):
         long_descr: str | None = None,
         json_metadata: str | None = None,
     ) -> str:
-        """Создать аннотацию (событие на временной шкале) в указанном слое.
+        """Create an annotation (timeline event) in the specified layer.
 
-        Аннотации отображаются как вертикальные линии или области на временных графиках.
+        Annotations are displayed as vertical lines or areas on time-series charts.
 
         Args:
-            annotation_layer_id: ID слоя аннотаций (из annotation_layer_list).
-            short_descr: Краткое описание события (отображается на графике).
-            start_dttm: Дата/время начала в ISO-формате. Пример: "2024-01-01T00:00:00"
-            end_dttm: Дата/время окончания в ISO-формате. Пример: "2024-01-01T23:59:59"
-                Для точечного события start_dttm = end_dttm.
-            long_descr: Подробное описание события (опционально).
-            json_metadata: JSON-строка с дополнительными метаданными (опционально).
+            annotation_layer_id: Annotation layer ID (from annotation_layer_list).
+            short_descr: Brief event description (displayed on the chart).
+            start_dttm: Start datetime in ISO format. Example: "2024-01-01T00:00:00"
+            end_dttm: End datetime in ISO format. Example: "2024-01-01T23:59:59"
+                For a point-in-time event, set start_dttm = end_dttm.
+            long_descr: Detailed event description (optional).
+            json_metadata: JSON string with additional metadata (optional).
         """
         payload = {
             "short_descr": short_descr,
@@ -439,11 +439,11 @@ def register_system_tools(mcp):
         annotation_layer_id: int,
         annotation_id: int,
     ) -> str:
-        """Получить аннотацию по ID.
+        """Get an annotation by ID.
 
         Args:
-            annotation_layer_id: ID слоя аннотаций.
-            annotation_id: ID аннотации (из annotation_list).
+            annotation_layer_id: Annotation layer ID.
+            annotation_id: Annotation ID (from annotation_list).
         """
         result = await client.get(f"/api/v1/annotation_layer/{annotation_layer_id}/annotation/{annotation_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -457,15 +457,15 @@ def register_system_tools(mcp):
         end_dttm: str | None = None,
         long_descr: str | None = None,
     ) -> str:
-        """Обновить аннотацию. Передавайте только изменяемые поля.
+        """Update an annotation. Pass only the fields to change.
 
         Args:
-            annotation_layer_id: ID слоя аннотаций.
-            annotation_id: ID аннотации для обновления.
-            short_descr: Новое краткое описание.
-            start_dttm: Новая дата начала (ISO-формат: "2024-01-01T00:00:00").
-            end_dttm: Новая дата окончания (ISO-формат).
-            long_descr: Новое подробное описание.
+            annotation_layer_id: Annotation layer ID.
+            annotation_id: Annotation ID to update.
+            short_descr: New brief description.
+            start_dttm: New start datetime (ISO format: "2024-01-01T00:00:00").
+            end_dttm: New end datetime (ISO format).
+            long_descr: New detailed description.
         """
         payload = {}
         if short_descr is not None:
@@ -488,12 +488,12 @@ def register_system_tools(mcp):
         annotation_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить аннотацию из слоя.
+        """Delete an annotation from a layer.
 
         Args:
-            annotation_layer_id: ID слоя аннотаций.
-            annotation_id: ID аннотации для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            annotation_layer_id: Annotation layer ID.
+            annotation_id: Annotation ID to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -504,9 +504,9 @@ def register_system_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление аннотации '{descr}' "
-                        f"(ID={annotation_id}) из слоя {annotation_layer_id}. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deletion of annotation '{descr}' "
+                        f"(ID={annotation_id}) from layer {annotation_layer_id}. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -519,10 +519,10 @@ def register_system_tools(mcp):
 
     @mcp.tool
     async def superset_assets_export() -> str:
-        """Экспортировать ВСЕ ассеты Superset в один ZIP-файл.
+        """Export ALL Superset assets into a single ZIP file.
 
-        Включает: дашборды, графики, датасеты, подключения к БД (без паролей).
-        Полезно для бэкапа или миграции между инстансами.
+        Includes: dashboards, charts, datasets, database connections (without passwords).
+        Useful for backup or migration between instances.
 
         Returns:
             JSON: {"format": "zip", "encoding": "base64", "data": "...", "size_bytes": N}
@@ -544,25 +544,25 @@ def register_system_tools(mcp):
         overwrite: bool = False,
         confirm_overwrite: bool = False,
     ) -> str:
-        """Импортировать ассеты Superset из ZIP-файла (созданного через assets_export).
+        """Import Superset assets from a ZIP file (created via assets_export).
 
-        КРИТИЧНО: overwrite=True перезаписывает ВСЕ совпадающие объекты
-        (дашборды, чарты, датасеты, БД). Это необратимо.
+        CRITICAL: overwrite=True overwrites ALL matching objects
+        (dashboards, charts, datasets, databases). This is irreversible.
 
         Args:
-            file_path: Абсолютный путь к ZIP-файлу на диске.
-            overwrite: Перезаписать существующие объекты с такими же UUID (по умолчанию False).
-            confirm_overwrite: Подтверждение перезаписи (ОБЯЗАТЕЛЬНО при overwrite=True).
+            file_path: Absolute path to the ZIP file on disk.
+            overwrite: Overwrite existing objects with matching UUIDs (default False).
+            confirm_overwrite: Overwrite confirmation (REQUIRED when overwrite=True).
         """
         if overwrite and not confirm_overwrite:
             return json.dumps(
                 {
                     "error": (
-                        "ОТКЛОНЕНО: overwrite=True без confirm_overwrite=True. "
-                        "assets_import с overwrite=True перезаписывает ВСЕ совпадающие "
-                        "объекты (дашборды, чарты, датасеты, подключения к БД). "
-                        "Это может откатить весь Superset к состоянию из ZIP-файла. "
-                        "Передайте confirm_overwrite=True для подтверждения."
+                        "REJECTED: overwrite=True without confirm_overwrite=True. "
+                        "assets_import with overwrite=True overwrites ALL matching "
+                        "objects (dashboards, charts, datasets, database connections). "
+                        "This may roll back the entire Superset to the state from the ZIP file. "
+                        "Pass confirm_overwrite=True to confirm."
                     )
                 },
                 ensure_ascii=False,

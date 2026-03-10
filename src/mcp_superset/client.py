@@ -1,4 +1,4 @@
-"""HTTP-клиент для Superset REST API с автоматической аутентификацией."""
+"""HTTP client for Superset REST API with automatic authentication."""
 
 from typing import Any
 
@@ -8,10 +8,10 @@ from mcp_superset.auth import AuthManager
 
 
 class SupersetClient:
-    """Единый async HTTP-клиент для взаимодействия с Superset REST API.
+    """Unified async HTTP client for interacting with Superset REST API.
 
-    Автоматически подставляет JWT + CSRF в заголовки,
-    обрабатывает ошибки API и предоставляет удобные методы CRUD.
+    Automatically injects JWT + CSRF into headers, handles API errors,
+    and provides convenient CRUD methods.
     """
 
     def __init__(self, auth_manager: AuthManager, base_url: str):
@@ -23,10 +23,13 @@ class SupersetClient:
         )
 
     async def _get_headers(self, need_csrf: bool = False) -> dict[str, str]:
-        """Формирует заголовки с актуальным JWT и CSRF-токеном.
+        """Build request headers with a valid JWT and optionally a CSRF token.
 
         Args:
-            need_csrf: True для мутирующих запросов (POST/PUT/DELETE).
+            need_csrf: True for mutating requests (POST/PUT/DELETE).
+
+        Returns:
+            Dictionary of HTTP headers.
         """
         token = await self.auth.get_token(self._client)
         headers = {
@@ -47,7 +50,23 @@ class SupersetClient:
         params: dict[str, Any] | None = None,
         json_data: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        """Выполняет HTTP-запрос к Superset API с обработкой ошибок."""
+        """Execute an HTTP request to Superset API with error handling.
+
+        Automatically retries on 401 (expired token). Does NOT retry on 400
+        (Bad Request) as that indicates a data validation error.
+
+        Args:
+            method: HTTP method (GET, POST, PUT, DELETE).
+            endpoint: API endpoint path (e.g. "/api/v1/chart/").
+            params: Optional query parameters.
+            json_data: Optional JSON body payload.
+
+        Returns:
+            Parsed JSON response as a dictionary.
+
+        Raises:
+            SupersetAPIError: If the API returns a 4xx/5xx status code.
+        """
         url = f"{self.base_url}{endpoint}"
         need_csrf = method.upper() in ("POST", "PUT", "DELETE")
         headers = await self._get_headers(need_csrf=need_csrf)
@@ -61,8 +80,7 @@ class SupersetClient:
         )
 
         if resp.status_code == 401:
-            # Токен протух — сбрасываем и пробуем ещё раз
-            # НЕ ретраим 400 (Bad Request) — это ошибка валидации данных
+            # Token expired — invalidate and retry once
             self.auth.invalidate()
             headers = await self._get_headers(need_csrf=need_csrf)
             resp = await self._client.request(
@@ -91,19 +109,66 @@ class SupersetClient:
         return resp.json()
 
     async def get(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send a GET request to the given API endpoint.
+
+        Args:
+            endpoint: API endpoint path.
+            params: Optional query parameters.
+
+        Returns:
+            Parsed JSON response.
+        """
         return await self._request("GET", endpoint, params=params)
 
     async def post(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send a POST request to the given API endpoint.
+
+        Args:
+            endpoint: API endpoint path.
+            json_data: Optional JSON body payload.
+
+        Returns:
+            Parsed JSON response.
+        """
         return await self._request("POST", endpoint, json_data=json_data)
 
     async def put(self, endpoint: str, json_data: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send a PUT request to the given API endpoint.
+
+        Args:
+            endpoint: API endpoint path.
+            json_data: Optional JSON body payload.
+
+        Returns:
+            Parsed JSON response.
+        """
         return await self._request("PUT", endpoint, json_data=json_data)
 
     async def delete(self, endpoint: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send a DELETE request to the given API endpoint.
+
+        Args:
+            endpoint: API endpoint path.
+            params: Optional query parameters.
+
+        Returns:
+            Parsed JSON response.
+        """
         return await self._request("DELETE", endpoint, params=params)
 
     async def get_raw(self, endpoint: str, params: dict[str, Any] | None = None) -> bytes:
-        """GET-запрос с возвратом сырых байтов (для export endpoints)."""
+        """Send a GET request and return raw bytes (for export endpoints).
+
+        Args:
+            endpoint: API endpoint path.
+            params: Optional query parameters.
+
+        Returns:
+            Raw response content as bytes.
+
+        Raises:
+            SupersetAPIError: If the API returns a 4xx/5xx status code.
+        """
         url = f"{self.base_url}{endpoint}"
         headers = await self._get_headers(need_csrf=False)
         headers.pop("Content-Type", None)
@@ -138,7 +203,19 @@ class SupersetClient:
         files: dict,
         data: dict | None = None,
     ) -> dict[str, Any]:
-        """POST multipart/form-data (для import endpoints)."""
+        """Send a POST multipart/form-data request (for import endpoints).
+
+        Args:
+            endpoint: API endpoint path.
+            files: Dictionary of files to upload (as expected by httpx).
+            data: Optional form data fields.
+
+        Returns:
+            Parsed JSON response.
+
+        Raises:
+            SupersetAPIError: If the API returns a 4xx/5xx status code.
+        """
         url = f"{self.base_url}{endpoint}"
         token = await self.auth.get_token(self._client)
         csrf = await self.auth.get_csrf_token(self._client)
@@ -182,30 +259,30 @@ class SupersetClient:
 
     @staticmethod
     def _build_rison_q(page: int, page_size: int, existing_q: str | None = None) -> str:
-        """Формирует RISON-строку с пагинацией, мержа с существующим q-фильтром.
+        """Build a RISON query string with pagination, merging with an existing q filter.
 
-        Superset игнорирует page/page_size как query-параметры —
-        они ОБЯЗАТЕЛЬНО должны быть внутри RISON-параметра q.
+        Superset ignores page/page_size as query parameters — they MUST be
+        inside the RISON q parameter.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Размер страницы.
-            existing_q: Существующий RISON-фильтр (напр. "(filters:!(...))").
+            page: Page number (0-based).
+            page_size: Number of results per page.
+            existing_q: Existing RISON filter string (e.g. "(filters:!(...))").
 
         Returns:
-            RISON-строка с пагинацией: "(page:0,page_size:100,...)"
+            RISON string with pagination, e.g. "(page:0,page_size:100,...)".
         """
         pagination = f"page:{page},page_size:{page_size}"
         if not existing_q:
             return f"({pagination})"
-        # Мержим: вставляем пагинацию внутрь существующих RISON-скобок
+        # Merge: insert pagination inside existing RISON parentheses
         q = existing_q.strip()
         if q.startswith("(") and q.endswith(")"):
             inner = q[1:-1].strip()
             if inner:
                 return f"({pagination},{inner})"
             return f"({pagination})"
-        # Если формат нестандартный — оборачиваем
+        # Non-standard format — wrap everything
         return f"({pagination},{q})"
 
     async def get_all(
@@ -215,22 +292,23 @@ class SupersetClient:
         page_size: int = 100,
         max_pages: int = 100,
     ) -> dict[str, Any]:
-        """GET-запрос с автоматической пагинацией — возвращает ВСЕ записи.
+        """Send a GET request with automatic pagination — returns ALL records.
 
-        Последовательно запрашивает страницы по page_size записей,
-        пока не получит все результаты (ориентируется на поле count в ответе).
+        Sequentially fetches pages of page_size records until all results are
+        retrieved (based on the count field in the response).
 
-        ВАЖНО: Superset требует пагинацию через RISON в параметре q,
-        а НЕ через отдельные query-параметры page/page_size.
+        Superset requires pagination via RISON in the q parameter,
+        NOT via separate page/page_size query parameters.
 
         Args:
-            endpoint: API endpoint (напр. "/api/v1/security/roles/").
-            params: Дополнительные query-параметры (q, фильтры и т.д.).
-            page_size: Размер страницы (макс. 100 для Superset API).
-            max_pages: Максимум страниц (защита от бесконечного цикла, default=100 → 10000 записей).
+            endpoint: API endpoint (e.g. "/api/v1/security/roles/").
+            params: Additional query parameters (q, filters, etc.).
+            page_size: Page size (max 100 for Superset API).
+            max_pages: Maximum number of pages to fetch (safeguard against
+                infinite loops, default=100 -> 10000 records).
 
         Returns:
-            Объединённый результат: {"result": [...все записи...], "count": N}.
+            Combined result: {"result": [...all records...], "count": N}.
         """
         all_results: list[Any] = []
         page = 0
@@ -257,11 +335,12 @@ class SupersetClient:
         return {"result": all_results, "count": total_count or len(all_results)}
 
     async def close(self) -> None:
+        """Close the underlying HTTP client and release resources."""
         await self._client.aclose()
 
 
 class SupersetAPIError(Exception):
-    """Ошибка Superset REST API."""
+    """Error returned by Superset REST API."""
 
     def __init__(self, status_code: int, detail: str):
         self.status_code = status_code

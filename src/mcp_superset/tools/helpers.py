@@ -1,8 +1,8 @@
-"""Общие хелперы для автоматической синхронизации прав доступа.
+"""Common helpers for automatic access rights synchronization.
 
-Принцип: если дашборд имеет roles=[R1, R2], то каждая роль R1, R2
-автоматически получает datasource_access ко ВСЕМ датасетам этого дашборда.
-Это гарантирует: добавил пользователя в группу → он видит дашборд и данные.
+Principle: if a dashboard has roles=[R1, R2], then each role R1, R2
+automatically receives datasource_access to ALL datasets of that dashboard.
+This guarantees: add a user to a group -> they can see the dashboard and its data.
 """
 
 from typing import Any
@@ -12,14 +12,14 @@ async def find_datasource_permissions(
     client: Any,
     dataset_ids: set[int],
 ) -> dict[int, int]:
-    """Находит permission_view_menu_id для datasource_access на указанные датасеты.
+    """Find permission_view_menu_id for datasource_access on the specified datasets.
 
     Args:
-        client: SupersetClient.
-        dataset_ids: Множество ID датасетов для поиска.
+        client: SupersetClient instance.
+        dataset_ids: Set of dataset IDs to look up.
 
     Returns:
-        Словарь {dataset_id: permission_view_menu_id}.
+        Mapping of {dataset_id: permission_view_menu_id}.
     """
     found: dict[int, int] = {}
     page = 0
@@ -53,20 +53,20 @@ async def auto_sync_dashboard_access(
     client: Any,
     dashboard_id: int,
 ) -> dict[str, Any]:
-    """Автоматически синхронизирует datasource_access для ролей дашборда.
+    """Automatically synchronize datasource_access for dashboard roles.
 
-    Для каждой роли, указанной в dashboard.roles:
-    1. Получает все датасеты дашборда
-    2. Находит datasource_access permission_view_menu_id
-    3. Проверяет текущие права роли
-    4. Добавляет недостающие
+    For each role assigned to the dashboard:
+    1. Retrieves all dashboard datasets
+    2. Finds datasource_access permission_view_menu_id for each
+    3. Checks current role permissions
+    4. Adds any missing permissions
 
     Args:
-        client: SupersetClient.
-        dashboard_id: ID дашборда.
+        client: SupersetClient instance.
+        dashboard_id: ID of the dashboard.
 
     Returns:
-        Отчёт о синхронизации.
+        Synchronization report dict.
     """
     result = {
         "dashboard_id": dashboard_id,
@@ -75,48 +75,48 @@ async def auto_sync_dashboard_access(
         "errors": [],
     }
 
-    # Получаем дашборд
+    # Fetch the dashboard
     try:
         db_resp = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         db_data = db_resp.get("result", {})
     except Exception as e:
-        result["errors"].append(f"Не удалось получить дашборд {dashboard_id}: {e}")
+        result["errors"].append(f"Failed to fetch dashboard {dashboard_id}: {e}")
         return result
 
-    # Роли дашборда
+    # Dashboard roles
     db_roles = db_data.get("roles", [])
     if not db_roles:
-        result["already_ok"].append("Нет ролей на дашборде — синхронизация не требуется")
+        result["already_ok"].append("No roles on dashboard — sync not required")
         return result
 
     role_ids = [r["id"] for r in db_roles if isinstance(r, dict)]
 
-    # Датасеты дашборда
+    # Dashboard datasets
     try:
         ds_resp = await client.get(f"/api/v1/dashboard/{dashboard_id}/datasets")
         datasets = ds_resp.get("result", [])
     except Exception as e:
-        result["errors"].append(f"Не удалось получить датасеты: {e}")
+        result["errors"].append(f"Failed to fetch datasets: {e}")
         return result
 
     if not datasets:
-        result["already_ok"].append("Нет датасетов — нечего синхронизировать")
+        result["already_ok"].append("No datasets — nothing to sync")
         return result
 
     dataset_ids = {d["id"] for d in datasets if isinstance(d, dict)}
     dataset_names = {d["id"]: d.get("table_name", f"id:{d['id']}") for d in datasets}
 
-    # Находим permission_view_menu_id для каждого датасета
+    # Find permission_view_menu_id for each dataset
     ds_perms = await find_datasource_permissions(client, dataset_ids)
 
     if not ds_perms:
         result["errors"].append(
-            f"Не найдены datasource_access permissions для датасетов: "
+            f"No datasource_access permissions found for datasets: "
             f"{[dataset_names.get(did, did) for did in dataset_ids]}"
         )
         return result
 
-    # Для каждой роли проверяем и добавляем недостающие
+    # For each role, check and add missing permissions
     for role_id in role_ids:
         try:
             perms_resp = await client.get(f"/api/v1/security/roles/{role_id}/permissions/")
@@ -127,17 +127,17 @@ async def auto_sync_dashboard_access(
                 elif isinstance(p, int):
                     current_perm_ids.add(p)
 
-            # Проверяем какие datasource_access отсутствуют
+            # Check which datasource_access permissions are missing
             missing = {}
             for ds_id, pvm_id in ds_perms.items():
                 if pvm_id not in current_perm_ids:
                     missing[ds_id] = pvm_id
 
             if not missing:
-                result["already_ok"].append(f"Роль {role_id}: все datasource_access уже есть")
+                result["already_ok"].append(f"Role {role_id}: all datasource_access already present")
                 continue
 
-            # Добавляем недостающие
+            # Add missing permissions
             new_perm_ids = sorted(current_perm_ids | set(missing.values()))
             await client.put(
                 f"/api/v1/security/roles/{role_id}/permissions/",
@@ -154,7 +154,7 @@ async def auto_sync_dashboard_access(
             )
 
         except Exception as e:
-            result["errors"].append(f"Ошибка роли {role_id}: {e}")
+            result["errors"].append(f"Error for role {role_id}: {e}")
 
     return result
 
@@ -164,25 +164,25 @@ async def auto_sync_chart_dashboards(
     chart_id: int | None = None,
     datasource_id: int | None = None,
 ) -> list[dict[str, Any]]:
-    """Синхронизирует доступ для всех дашбордов, содержащих указанный чарт.
+    """Synchronize access for all dashboards containing the specified chart.
 
-    Вызывается после chart_create/chart_update. Находит дашборды чарта
-    и для каждого запускает auto_sync_dashboard_access.
+    Called after chart_create/chart_update. Finds dashboards that include the chart
+    and runs auto_sync_dashboard_access for each.
 
     Args:
-        client: SupersetClient.
-        chart_id: ID чарта (если известен).
-        datasource_id: ID датасета чарта (опционально, для оптимизации).
+        client: SupersetClient instance.
+        chart_id: ID of the chart (if known).
+        datasource_id: ID of the chart's dataset (optional, for optimization).
 
     Returns:
-        Список отчётов по каждому синхронизированному дашборду.
+        List of sync reports, one per synchronized dashboard.
     """
     results = []
 
     if not chart_id:
         return results
 
-    # Получаем чарт и его дашборды
+    # Fetch the chart and its dashboards
     try:
         chart_resp = await client.get(f"/api/v1/chart/{chart_id}")
         chart_data = chart_resp.get("result", {})

@@ -1,12 +1,13 @@
-"""Инструменты для управления группами пользователей в Superset."""
+"""Tools for managing user groups in Superset."""
 
 import json
 
 
 def register_group_tools(mcp):
+    """Register all group management tools with the MCP server."""
     from mcp_superset.server import superset_client as client
 
-    # === Группы ===
+    # === Groups ===
 
     @mcp.tool
     async def superset_group_list(
@@ -15,17 +16,17 @@ def register_group_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список групп пользователей Superset.
+        """List Superset user groups.
 
-        Группа объединяет пользователей и роли. Пользователи в группе
-        наследуют все роли, назначенные группе.
+        A group combines users and roles. Users in a group
+        inherit all roles assigned to the group.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:name,opr:ct,value:moscow)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией.
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for search. Examples:
+                - By name: (filters:!((col:name,opr:ct,value:moscow)))
+            get_all: Fetch ALL records with automatic pagination.
         """
         if get_all:
             params = {}
@@ -43,12 +44,12 @@ def register_group_tools(mcp):
 
     @mcp.tool
     async def superset_group_get(group_id: int) -> str:
-        """Получить детальную информацию о группе по ID.
+        """Get detailed information about a group by ID.
 
-        Возвращает: название, метку, описание, список ролей и пользователей.
+        Returns: name, label, description, list of roles and users.
 
         Args:
-            group_id: ID группы (из group_list).
+            group_id: Group ID (from group_list).
         """
         result = await client.get(f"/api/v1/security/groups/{group_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -61,17 +62,17 @@ def register_group_tools(mcp):
         roles: list[int] | None = None,
         users: list[int] | None = None,
     ) -> str:
-        """Создать новую группу пользователей.
+        """Create a new user group.
 
-        Группа объединяет пользователей и роли. Пользователи в группе
-        автоматически наследуют все роли группы.
+        A group combines users and roles. Users in a group
+        automatically inherit all roles of the group.
 
         Args:
-            name: Уникальное имя группы (напр. "la_region_Московская").
-            label: Отображаемая метка (напр. "Московская область").
-            description: Описание группы.
-            roles: Список ID ролей для назначения группе.
-            users: Список ID пользователей для добавления в группу.
+            name: Unique group name (e.g. "la_region_Moscow").
+            label: Display label (e.g. "Moscow region").
+            description: Group description.
+            roles: List of role IDs to assign to the group.
+            users: List of user IDs to add to the group.
         """
         payload: dict = {"name": name}
         if label is not None:
@@ -82,7 +83,7 @@ def register_group_tools(mcp):
         result = await client.post("/api/v1/security/groups/", json_data=payload)
         group_id = result.get("id")
 
-        # Роли и пользователи назначаются через update (create принимает только name/label/description)
+        # Roles and users are assigned via update (create only accepts name/label/description)
         if group_id and (roles is not None or users is not None):
             update_payload: dict = {}
             if roles is not None:
@@ -93,7 +94,7 @@ def register_group_tools(mcp):
                 f"/api/v1/security/groups/{group_id}",
                 json_data=update_payload,
             )
-            # Получаем полную информацию
+            # Fetch full details
             detail = await client.get(f"/api/v1/security/groups/{group_id}")
             return json.dumps(
                 {"id": group_id, "result": detail.get("result", {})},
@@ -113,23 +114,23 @@ def register_group_tools(mcp):
         confirm_roles_replace: bool = False,
         confirm_users_replace: bool = False,
     ) -> str:
-        """Обновить группу. Передавайте только изменяемые поля.
+        """Update a group. Only pass the fields you want to change.
 
-        ВАЖНО: roles ЗАМЕНЯЕТ весь список ролей группы (не добавляет).
-        ВАЖНО: users ЗАМЕНЯЕТ весь список пользователей группы (не добавляет).
+        IMPORTANT: roles REPLACES the entire role list of the group (does not append).
+        IMPORTANT: users REPLACES the entire user list of the group (does not append).
 
-        Для добавления одной роли/пользователя: получите текущие через group_get,
-        добавьте ID в список, передайте полный список.
+        To add a single role/user: fetch current ones via group_get,
+        add the ID to the list, pass the complete list.
 
         Args:
-            group_id: ID группы для обновления.
-            name: Новое имя группы.
-            label: Новая метка.
-            description: Новое описание.
-            roles: Новый ПОЛНЫЙ список ID ролей (ЗАМЕНЯЕТ все текущие).
-            users: Новый ПОЛНЫЙ список ID пользователей (ЗАМЕНЯЕТ всех текущих).
-            confirm_roles_replace: Подтверждение замены ролей (ОБЯЗАТЕЛЬНО при roles).
-            confirm_users_replace: Подтверждение замены пользователей (ОБЯЗАТЕЛЬНО при users).
+            group_id: ID of the group to update.
+            name: New group name.
+            label: New label.
+            description: New description.
+            roles: New COMPLETE list of role IDs (REPLACES all current ones).
+            users: New COMPLETE list of user IDs (REPLACES all current ones).
+            confirm_roles_replace: Confirmation for role replacement (REQUIRED when roles is set).
+            confirm_users_replace: Confirmation for user replacement (REQUIRED when users is set).
         """
         if roles is not None and not confirm_roles_replace:
             try:
@@ -138,13 +139,13 @@ def register_group_tools(mcp):
                 current_roles = current.get("roles", [])
                 role_names = [f"{r['name']} (id={r['id']})" for r in current_roles]
             except Exception:
-                role_names = ["не удалось получить"]
+                role_names = ["failed to retrieve"]
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: roles ЗАМЕНЯЕТ ВСЕ роли группы (ID={group_id}). "
-                        f"Текущие роли: {role_names}. "
-                        f"Передайте confirm_roles_replace=True для подтверждения."
+                        f"REJECTED: roles REPLACES ALL roles of the group (ID={group_id}). "
+                        f"Current roles: {role_names}. "
+                        f"Pass confirm_roles_replace=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -157,13 +158,13 @@ def register_group_tools(mcp):
                 current_users = current.get("users", [])
                 user_names = [f"{u['username']} (id={u['id']})" for u in current_users]
             except Exception:
-                user_names = ["не удалось получить"]
+                user_names = ["failed to retrieve"]
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: users ЗАМЕНЯЕТ ВСЕХ пользователей группы (ID={group_id}). "
-                        f"Текущие пользователи: {user_names}. "
-                        f"Передайте confirm_users_replace=True для подтверждения."
+                        f"REJECTED: users REPLACES ALL users of the group (ID={group_id}). "
+                        f"Current users: {user_names}. "
+                        f"Pass confirm_users_replace=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -183,7 +184,7 @@ def register_group_tools(mcp):
 
         if not payload:
             return json.dumps(
-                {"error": "Не передано ни одного поля для обновления."},
+                {"error": "No fields provided for update."},
                 ensure_ascii=False,
             )
 
@@ -195,14 +196,14 @@ def register_group_tools(mcp):
         group_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить группу пользователей.
+        """Delete a user group.
 
-        Пользователи группы НЕ удаляются, но теряют роли,
-        которые были назначены через эту группу.
+        Users in the group are NOT deleted, but they lose the roles
+        that were assigned through this group.
 
         Args:
-            group_id: ID группы для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            group_id: ID of the group to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -213,14 +214,15 @@ def register_group_tools(mcp):
                 users = [u["username"] for u in current.get("users", [])]
             except Exception:
                 name = f"ID={group_id}"
-                roles = ["не удалось получить"]
-                users = ["не удалось получить"]
+                roles = ["failed to retrieve"]
+                users = ["failed to retrieve"]
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление группы '{name}' (ID={group_id}). "
-                        f"Роли: {roles}. Пользователи ({len(users)}): {users[:10]}{'...' if len(users) > 10 else ''}. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deleting group '{name}' (ID={group_id}). "
+                        f"Roles: {roles}. Users ({len(users)}): "
+                        f"{users[:10]}{'...' if len(users) > 10 else ''}. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -234,14 +236,14 @@ def register_group_tools(mcp):
         group_id: int,
         user_ids: list[int],
     ) -> str:
-        """Добавить пользователей в группу (без удаления существующих).
+        """Add users to a group without removing existing ones.
 
-        Удобный инструмент: получает текущих пользователей группы,
-        добавляет новых и обновляет группу.
+        Convenience tool: fetches current group users,
+        merges in new ones, and updates the group.
 
         Args:
-            group_id: ID группы.
-            user_ids: Список ID пользователей для добавления.
+            group_id: Group ID.
+            user_ids: List of user IDs to add.
         """
         info = await client.get(f"/api/v1/security/groups/{group_id}")
         current = info.get("result", {})
@@ -272,11 +274,11 @@ def register_group_tools(mcp):
         group_id: int,
         user_ids: list[int],
     ) -> str:
-        """Удалить пользователей из группы (без удаления остальных).
+        """Remove users from a group without removing the rest.
 
         Args:
-            group_id: ID группы.
-            user_ids: Список ID пользователей для удаления из группы.
+            group_id: Group ID.
+            user_ids: List of user IDs to remove from the group.
         """
         info = await client.get(f"/api/v1/security/groups/{group_id}")
         current = info.get("result", {})
@@ -307,11 +309,11 @@ def register_group_tools(mcp):
         group_id: int,
         role_ids: list[int],
     ) -> str:
-        """Добавить роли в группу (без удаления существующих).
+        """Add roles to a group without removing existing ones.
 
         Args:
-            group_id: ID группы.
-            role_ids: Список ID ролей для добавления.
+            group_id: Group ID.
+            role_ids: List of role IDs to add.
         """
         info = await client.get(f"/api/v1/security/groups/{group_id}")
         current = info.get("result", {})
@@ -342,11 +344,11 @@ def register_group_tools(mcp):
         group_id: int,
         role_ids: list[int],
     ) -> str:
-        """Удалить роли из группы (без удаления остальных).
+        """Remove roles from a group without removing the rest.
 
         Args:
-            group_id: ID группы.
-            role_ids: Список ID ролей для удаления.
+            group_id: Group ID.
+            role_ids: List of role IDs to remove.
         """
         info = await client.get(f"/api/v1/security/groups/{group_id}")
         current = info.get("result", {})

@@ -1,4 +1,4 @@
-"""Инструменты для управления подключениями к базам данных в Superset."""
+"""Tools for managing database connections in Superset."""
 
 import json
 
@@ -13,18 +13,18 @@ def register_database_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список подключений к базам данных в Superset.
+        """List database connections configured in Superset.
 
-        Возвращает ID, название, тип движка и статус каждого подключения.
-        ВАЖНО: всегда вызывайте перед database_get, чтобы узнать актуальные ID.
+        Returns the ID, name, engine type, and status of each connection.
+        IMPORTANT: always call before database_get to discover current IDs.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:database_name,opr:ct,value:postgres)))
-                - По типу: (filters:!((col:backend,opr:eq,value:postgresql)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for searching. Examples:
+                - By name: (filters:!((col:database_name,opr:ct,value:postgres)))
+                - By type: (filters:!((col:backend,opr:eq,value:postgresql)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -40,12 +40,12 @@ def register_database_tools(mcp):
 
     @mcp.tool
     async def superset_database_get(database_id: int) -> str:
-        """Получить детальную информацию о подключении к БД по ID.
+        """Get detailed information about a database connection by ID.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_database_list.
+        IMPORTANT: if the ID is unknown, call superset_database_list first.
 
         Args:
-            database_id: ID подключения (целое число из результата database_list).
+            database_id: Connection ID (integer from database_list result).
         """
         result = await client.get(f"/api/v1/database/{database_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -61,23 +61,23 @@ def register_database_tools(mcp):
         allow_run_async: bool = False,
         extra: str | None = None,
     ) -> str:
-        """Создать новое подключение к базе данных.
+        """Create a new database connection.
 
-        ВАЖНО: Superset проверяет доступность БД при создании.
-        URI должен быть доступен с сервера Superset (не localhost клиента).
+        IMPORTANT: Superset validates database availability on creation.
+        The URI must be reachable from the Superset server (not the client's localhost).
 
         Args:
-            database_name: Человекочитаемое название подключения.
-            sqlalchemy_uri: SQLAlchemy URI строка подключения. Примеры:
+            database_name: Human-readable connection name.
+            sqlalchemy_uri: SQLAlchemy connection URI string. Examples:
                 - PostgreSQL: postgresql://user:pass@host:5432/dbname
                 - MySQL: mysql://user:pass@host:3306/dbname
                 - SQLite: sqlite:///path/to/db.sqlite
-            expose_in_sqllab: Показывать ли в SQL Lab (по умолчанию True).
-            allow_ctas: Разрешить CREATE TABLE AS SELECT.
-            allow_cvas: Разрешить CREATE VIEW AS SELECT.
-            allow_dml: Разрешить INSERT/UPDATE/DELETE.
-            allow_run_async: Разрешить асинхронное выполнение запросов.
-            extra: JSON-строка с дополнительными настройками (engine_params, metadata_params).
+            expose_in_sqllab: Whether to show in SQL Lab (default True).
+            allow_ctas: Allow CREATE TABLE AS SELECT.
+            allow_cvas: Allow CREATE VIEW AS SELECT.
+            allow_dml: Allow INSERT/UPDATE/DELETE.
+            allow_run_async: Allow asynchronous query execution.
+            extra: JSON string with additional settings (engine_params, metadata_params).
         """
         payload = {
             "database_name": database_name,
@@ -105,19 +105,19 @@ def register_database_tools(mcp):
         extra: str | None = None,
         confirm_uri_change: bool = False,
     ) -> str:
-        """Обновить подключение к базе данных. Передавайте только изменяемые поля.
+        """Update a database connection. Pass only the fields you want to change.
 
         Args:
-            database_id: ID подключения для обновления.
-            database_name: Новое название подключения.
-            sqlalchemy_uri: Новый SQLAlchemy URI.
-                КРИТИЧНО: смена URI ломает все датасеты и чарты на этом подключении.
-            expose_in_sqllab: Показывать ли в SQL Lab.
-            allow_ctas: Разрешить CREATE TABLE AS SELECT.
-            allow_cvas: Разрешить CREATE VIEW AS SELECT.
-            allow_dml: Разрешить INSERT/UPDATE/DELETE.
-            extra: JSON-строка с дополнительными настройками.
-            confirm_uri_change: Подтверждение смены URI (ОБЯЗАТЕЛЬНО при изменении sqlalchemy_uri).
+            database_id: Connection ID to update.
+            database_name: New connection name.
+            sqlalchemy_uri: New SQLAlchemy URI.
+                CRITICAL: changing the URI breaks all datasets and charts using this connection.
+            expose_in_sqllab: Whether to show in SQL Lab.
+            allow_ctas: Allow CREATE TABLE AS SELECT.
+            allow_cvas: Allow CREATE VIEW AS SELECT.
+            allow_dml: Allow INSERT/UPDATE/DELETE.
+            extra: JSON string with additional settings.
+            confirm_uri_change: Confirmation for URI change (REQUIRED when changing sqlalchemy_uri).
         """
         if sqlalchemy_uri is not None and not confirm_uri_change:
             try:
@@ -132,10 +132,10 @@ def register_database_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: смена sqlalchemy_uri подключения '{db_name}' "
-                        f"(ID={database_id}) может сломать {charts_count} чартов "
-                        f"и {dashboards_count} дашбордов. "
-                        f"Передайте confirm_uri_change=True для подтверждения."
+                        f"REJECTED: changing sqlalchemy_uri for connection '{db_name}' "
+                        f"(ID={database_id}) may break {charts_count} charts "
+                        f"and {dashboards_count} dashboards. "
+                        f"Pass confirm_uri_change=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -164,13 +164,13 @@ def register_database_tools(mcp):
         database_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить подключение к БД. Все связанные датасеты станут нерабочими.
+        """Delete a database connection. All associated datasets will become broken.
 
-        КРИТИЧНО: удаление подключения ломает ВСЕ датасеты, чарты и дашборды на этой БД.
+        CRITICAL: deleting a connection breaks ALL datasets, charts, and dashboards using this DB.
 
         Args:
-            database_id: ID подключения для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            database_id: Connection ID to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -185,9 +185,9 @@ def register_database_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление подключения '{db_name}' (ID={database_id}) "
-                        f"сделает нерабочими {charts_count} чартов и {dashboards_count} дашбордов. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deleting connection '{db_name}' (ID={database_id}) "
+                        f"will break {charts_count} charts and {dashboards_count} dashboards. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -202,14 +202,14 @@ def register_database_tools(mcp):
         sqlalchemy_uri: str,
         extra: str | None = None,
     ) -> str:
-        """Проверить подключение к базе данных без создания.
+        """Test a database connection without creating it.
 
-        ВАЖНО: URI должен быть доступен с сервера Superset.
+        IMPORTANT: the URI must be reachable from the Superset server.
 
         Args:
-            database_name: Название подключения (для отображения в ошибках).
-            sqlalchemy_uri: SQLAlchemy URI для проверки.
-            extra: JSON-строка с дополнительными настройками.
+            database_name: Connection name (shown in error messages).
+            sqlalchemy_uri: SQLAlchemy URI to test.
+            extra: JSON string with additional settings.
         """
         payload = {
             "database_name": database_name,
@@ -222,12 +222,12 @@ def register_database_tools(mcp):
 
     @mcp.tool
     async def superset_database_schemas(database_id: int) -> str:
-        """Получить список схем (schemas) в базе данных.
+        """List schemas available in a database.
 
-        Полезно для выбора схемы перед запросом таблиц или созданием датасета.
+        Useful for selecting a schema before querying tables or creating a dataset.
 
         Args:
-            database_id: ID подключения к БД (из database_list).
+            database_id: Database connection ID (from database_list).
         """
         result = await client.get(f"/api/v1/database/{database_id}/schemas/")
         return json.dumps(result, ensure_ascii=False)
@@ -237,14 +237,14 @@ def register_database_tools(mcp):
         database_id: int,
         schema_name: str,
     ) -> str:
-        """Получить список таблиц и вью в указанной схеме базы данных.
+        """List tables and views in the specified database schema.
 
-        Полезно для выбора таблицы перед созданием датасета.
+        Useful for selecting a table before creating a dataset.
 
         Args:
-            database_id: ID подключения к БД (из database_list).
-            schema_name: Название схемы (из database_schemas). Примеры: "public", "source".
-                Передаётся в RISON-формате без кавычек.
+            database_id: Database connection ID (from database_list).
+            schema_name: Schema name (from database_schemas). Examples: "public", "source".
+                Passed in RISON format without quotes.
         """
         result = await client.get(
             f"/api/v1/database/{database_id}/tables/",
@@ -254,46 +254,46 @@ def register_database_tools(mcp):
 
     @mcp.tool
     async def superset_database_catalogs(database_id: int) -> str:
-        """Получить список каталогов в базе данных (для БД с поддержкой каталогов).
+        """List catalogs in a database (for engines that support catalogs).
 
-        Поддерживается не всеми движками. PostgreSQL и MySQL обычно не используют каталоги.
+        Not supported by all engines. PostgreSQL and MySQL typically do not use catalogs.
 
         Args:
-            database_id: ID подключения к БД.
+            database_id: Database connection ID.
         """
         result = await client.get(f"/api/v1/database/{database_id}/catalogs/")
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool
     async def superset_database_connection_info(database_id: int) -> str:
-        """Получить информацию о подключении (URI без пароля, параметры).
+        """Get connection information (URI without password, parameters).
 
         Args:
-            database_id: ID подключения к БД.
+            database_id: Database connection ID.
         """
         result = await client.get(f"/api/v1/database/{database_id}/connection")
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool
     async def superset_database_function_names(database_id: int) -> str:
-        """Получить список доступных SQL-функций в базе данных.
+        """List available SQL functions in the database.
 
-        Полезно для построения SQL-запросов с использованием специфичных функций движка.
+        Useful for building SQL queries with engine-specific functions.
 
         Args:
-            database_id: ID подключения к БД.
+            database_id: Database connection ID.
         """
         result = await client.get(f"/api/v1/database/{database_id}/function_names/")
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool
     async def superset_database_related_objects(database_id: int) -> str:
-        """Получить объекты, связанные с подключением (датасеты, графики).
+        """Get objects related to a database connection (datasets, charts).
 
-        Полезно перед удалением подключения, чтобы понять, что сломается.
+        Useful before deleting a connection to understand what will break.
 
         Args:
-            database_id: ID подключения к БД.
+            database_id: Database connection ID.
         """
         result = await client.get(f"/api/v1/database/{database_id}/related_objects/")
         return json.dumps(result, ensure_ascii=False)
@@ -304,14 +304,14 @@ def register_database_tools(mcp):
         sql: str,
         schema: str | None = None,
     ) -> str:
-        """Проверить синтаксис SQL-запроса без выполнения (EXPLAIN-подобная проверка).
+        """Validate SQL query syntax without executing it (EXPLAIN-like check).
 
-        ВАЖНО: не все движки БД поддерживают валидацию SQL. PostgreSQL поддерживает.
+        IMPORTANT: not all database engines support SQL validation. PostgreSQL does.
 
         Args:
-            database_id: ID подключения к БД.
-            sql: SQL-запрос для проверки.
-            schema: Схема для контекста проверки (напр. "public").
+            database_id: Database connection ID.
+            sql: SQL query to validate.
+            schema: Schema for validation context (e.g. "public").
         """
         payload = {"sql": sql}
         if schema is not None:
@@ -325,15 +325,15 @@ def register_database_tools(mcp):
         parameters: dict,
         configuration_method: str = "sqlalchemy_form",
     ) -> str:
-        """Проверить параметры подключения к БД без создания подключения.
+        """Validate database connection parameters without creating a connection.
 
         Args:
-            engine: Тип движка БД: "postgresql", "mysql", "sqlite", "mssql" и т.д.
-            parameters: Словарь параметров подключения:
+            engine: Database engine type: "postgresql", "mysql", "sqlite", "mssql", etc.
+            parameters: Connection parameters dictionary:
                 {"host": "...", "port": 5432, "database": "...",
                  "username": "...", "password": "..."}
-            configuration_method: Метод конфигурации: "sqlalchemy_form" (по умолчанию)
-                или "dynamic_form".
+            configuration_method: Configuration method: "sqlalchemy_form" (default)
+                or "dynamic_form".
         """
         payload = {
             "engine": engine,
@@ -349,14 +349,14 @@ def register_database_tools(mcp):
         table_name: str,
         schema_name: str | None = None,
     ) -> str:
-        """Сгенерировать SQL-запрос SELECT * для таблицы (с LIMIT).
+        """Generate a SELECT * SQL query for a table (with LIMIT).
 
-        Полезно для быстрого просмотра структуры и данных таблицы.
+        Useful for quickly inspecting table structure and data.
 
         Args:
-            database_id: ID подключения к БД.
-            table_name: Название таблицы.
-            schema_name: Схема (напр. "public"). Если не указана — default-схема.
+            database_id: Database connection ID.
+            table_name: Table name.
+            schema_name: Schema (e.g. "public"). If not specified, uses the default schema.
         """
         if schema_name:
             endpoint = f"/api/v1/database/{database_id}/select_star/{table_name}/{schema_name}/"
@@ -371,14 +371,14 @@ def register_database_tools(mcp):
         table_name: str,
         schema_name: str | None = None,
     ) -> str:
-        """Получить метаданные таблицы: колонки, типы данных, индексы, первичные ключи.
+        """Get table metadata: columns, data types, indexes, and primary keys.
 
-        Полезно для понимания структуры таблицы перед написанием SQL-запросов.
+        Useful for understanding table structure before writing SQL queries.
 
         Args:
-            database_id: ID подключения к БД.
-            table_name: Название таблицы.
-            schema_name: Схема (напр. "public"). Если не указана — default-схема.
+            database_id: Database connection ID.
+            table_name: Table name.
+            schema_name: Schema (e.g. "public"). If not specified, uses the default schema.
         """
         params = {"name": table_name}
         if schema_name:
@@ -393,12 +393,12 @@ def register_database_tools(mcp):
     async def superset_database_export(
         database_ids: str,
     ) -> str:
-        """Экспортировать конфигурации подключений к БД в ZIP-файл.
+        """Export database connection configurations as a ZIP file.
 
-        ВАЖНО: пароли НЕ экспортируются из соображений безопасности.
+        IMPORTANT: passwords are NOT exported for security reasons.
 
         Args:
-            database_ids: ID подключений через запятую (напр. "1,2").
+            database_ids: Comma-separated connection IDs (e.g. "1,2").
 
         Returns:
             JSON: {"format": "zip", "encoding": "base64", "data": "...", "size_bytes": N}
@@ -419,10 +419,10 @@ def register_database_tools(mcp):
 
     @mcp.tool
     async def superset_database_available_engines() -> str:
-        """Получить список поддерживаемых типов БД для создания подключений.
+        """List supported database engine types for creating connections.
 
-        Возвращает доступные движки: PostgreSQL, MySQL, SQLite, и т.д.
-        Полезно для выбора engine при создании нового подключения.
+        Returns available engines: PostgreSQL, MySQL, SQLite, etc.
+        Useful for selecting an engine when creating a new connection.
         """
         result = await client.get("/api/v1/database/available/")
         return json.dumps(result, ensure_ascii=False)

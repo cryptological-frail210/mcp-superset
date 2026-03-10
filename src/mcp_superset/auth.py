@@ -1,4 +1,4 @@
-"""Менеджер аутентификации в Superset — JWT с CSRF и refresh."""
+"""Authentication manager for Superset — JWT with CSRF and refresh."""
 
 import time
 
@@ -6,12 +6,12 @@ import httpx
 
 
 class AuthManager:
-    """Управление аутентификацией в Superset REST API.
+    """Manages authentication with Superset REST API.
 
-    Использует JWT-аутентификацию:
-    - Login: POST /api/v1/security/login с refresh=true
-    - CSRF: GET /api/v1/security/csrf_token/ (обязателен для POST/PUT/DELETE)
-    - Refresh: POST /api/v1/security/refresh при истечении access_token
+    Uses JWT authentication flow:
+    - Login: POST /api/v1/security/login with refresh=true
+    - CSRF: GET /api/v1/security/csrf_token/ (required for POST/PUT/DELETE)
+    - Refresh: POST /api/v1/security/refresh when access_token expires
     """
 
     def __init__(
@@ -26,37 +26,55 @@ class AuthManager:
         self.password = password
         self.provider = provider
 
-        # JWT-состояние
+        # JWT state
         self._access_token: str | None = None
         self._refresh_token: str | None = None
         self._csrf_token: str | None = None
         self._token_expires_at: float = 0
 
     async def get_token(self, client: httpx.AsyncClient) -> str:
-        """Возвращает актуальный access_token."""
-        # Проверяем не истёк ли токен (с запасом 30 сек)
+        """Return a valid access_token, refreshing or re-logging in as needed.
+
+        Args:
+            client: httpx async client used for HTTP requests.
+
+        Returns:
+            A valid JWT access token string.
+        """
+        # Check if token is still valid (with 30 sec safety margin)
         if self._access_token and time.time() < self._token_expires_at - 30:
             return self._access_token
 
-        # Пробуем refresh, если есть refresh-токен
+        # Try refresh if we have a refresh token
         if self._refresh_token:
             refreshed = await self._refresh(client)
             if refreshed:
                 return self._access_token
 
-        # Полный логин
+        # Full login
         await self._login(client)
         return self._access_token
 
     async def get_csrf_token(self, client: httpx.AsyncClient) -> str:
-        """Возвращает актуальный CSRF-токен (получает при необходимости)."""
+        """Return a valid CSRF token, fetching one if necessary.
+
+        Args:
+            client: httpx async client used for HTTP requests.
+
+        Returns:
+            A CSRF token string.
+        """
         if self._csrf_token:
             return self._csrf_token
         await self._fetch_csrf(client)
         return self._csrf_token
 
     async def _login(self, client: httpx.AsyncClient) -> None:
-        """Выполняет JWT-логин через POST /api/v1/security/login."""
+        """Perform JWT login via POST /api/v1/security/login.
+
+        Args:
+            client: httpx async client used for HTTP requests.
+        """
         url = f"{self.base_url}/api/v1/security/login"
         payload = {
             "username": self.username,
@@ -69,13 +87,20 @@ class AuthManager:
         data = resp.json()
         self._access_token = data["access_token"]
         self._refresh_token = data.get("refresh_token")
-        # По умолчанию JWT_ACCESS_TOKEN_EXPIRES = 15 минут (900 сек)
+        # Default JWT_ACCESS_TOKEN_EXPIRES = 15 minutes (900 sec)
         self._token_expires_at = time.time() + 900
-        # Сбрасываем CSRF — он привязан к сессии/токену
+        # Reset CSRF — it is bound to the session/token
         self._csrf_token = None
 
     async def _refresh(self, client: httpx.AsyncClient) -> bool:
-        """Пробует обновить JWT через refresh-токен."""
+        """Attempt to refresh the JWT using the refresh token.
+
+        Args:
+            client: httpx async client used for HTTP requests.
+
+        Returns:
+            True if refresh succeeded, False otherwise.
+        """
         url = f"{self.base_url}/api/v1/security/refresh"
         headers = {"Authorization": f"Bearer {self._refresh_token}"}
         try:
@@ -84,16 +109,20 @@ class AuthManager:
             data = resp.json()
             self._access_token = data["access_token"]
             self._token_expires_at = time.time() + 900
-            # Сбрасываем CSRF — нужен новый для нового токена
+            # Reset CSRF — a new one is needed for the new token
             self._csrf_token = None
             return True
         except (httpx.HTTPStatusError, KeyError):
-            # Refresh не удался — нужен полный логин
+            # Refresh failed — full login required
             self._refresh_token = None
             return False
 
     async def _fetch_csrf(self, client: httpx.AsyncClient) -> None:
-        """Получает CSRF-токен через GET /api/v1/security/csrf_token/."""
+        """Fetch CSRF token via GET /api/v1/security/csrf_token/.
+
+        Args:
+            client: httpx async client used for HTTP requests.
+        """
         token = await self.get_token(client)
         url = f"{self.base_url}/api/v1/security/csrf_token/"
         headers = {"Authorization": f"Bearer {token}"}
@@ -103,7 +132,7 @@ class AuthManager:
         self._csrf_token = data["result"]
 
     def invalidate(self) -> None:
-        """Сбрасывает все кешированные токены."""
+        """Reset all cached tokens, forcing re-authentication on next request."""
         self._access_token = None
         self._refresh_token = None
         self._csrf_token = None

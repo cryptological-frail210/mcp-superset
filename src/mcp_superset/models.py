@@ -1,187 +1,223 @@
-"""Pydantic-модели для параметров и ответов MCP-инструментов."""
+"""Pydantic models for MCP tool parameters and responses."""
 
 from pydantic import BaseModel, Field
 
-# === Общие модели для фильтрации и пагинации ===
+# === Common models for filtering and pagination ===
 
 
 class ListParams(BaseModel):
-    """Параметры пагинации и фильтрации для list-эндпоинтов."""
+    """Pagination and filtering parameters for list endpoints."""
 
-    page: int = Field(default=0, description="Номер страницы (начиная с 0)")
-    page_size: int = Field(default=25, description="Размер страницы (макс. 100)")
-    q: str | None = Field(default=None, description="JSON-фильтр в формате Superset RISON")
+    page: int = Field(default=0, description="Page number (starting from 0)")
+    page_size: int = Field(default=25, description="Page size (max 100)")
+    q: str | None = Field(default=None, description="JSON filter in Superset RISON format")
 
 
 # === Dashboard ===
 
 
 class DashboardCreate(BaseModel):
-    dashboard_title: str = Field(description="Название дашборда")
-    slug: str | None = Field(default=None, description="URL-slug")
-    published: bool = Field(default=False, description="Опубликован ли дашборд")
-    json_metadata: str | None = Field(default=None, description="JSON-метаданные")
-    css: str | None = Field(default=None, description="Пользовательский CSS")
-    position_json: str | None = Field(default=None, description="JSON-позиционирование виджетов")
+    """Parameters for creating a new dashboard."""
+
+    dashboard_title: str = Field(description="Dashboard title")
+    slug: str | None = Field(default=None, description="URL slug")
+    published: bool = Field(default=False, description="Whether the dashboard is published")
+    json_metadata: str | None = Field(default=None, description="JSON metadata")
+    css: str | None = Field(default=None, description="Custom CSS")
+    position_json: str | None = Field(default=None, description="JSON widget positioning layout")
 
 
 class DashboardUpdate(BaseModel):
-    dashboard_title: str | None = Field(default=None, description="Название дашборда")
-    slug: str | None = Field(default=None, description="URL-slug")
-    published: bool | None = Field(default=None, description="Опубликован ли дашборд")
-    json_metadata: str | None = Field(default=None, description="JSON-метаданные")
-    css: str | None = Field(default=None, description="Пользовательский CSS")
+    """Parameters for updating an existing dashboard."""
+
+    dashboard_title: str | None = Field(default=None, description="Dashboard title")
+    slug: str | None = Field(default=None, description="URL slug")
+    published: bool | None = Field(default=None, description="Whether the dashboard is published")
+    json_metadata: str | None = Field(default=None, description="JSON metadata")
+    css: str | None = Field(default=None, description="Custom CSS")
 
 
 # === Chart ===
 
 
 class ChartCreate(BaseModel):
-    slice_name: str = Field(description="Название графика")
-    viz_type: str = Field(description="Тип визуализации (table, bar, line, pie и т.д.)")
-    datasource_id: int = Field(description="ID датасета")
-    datasource_type: str = Field(default="table", description="Тип источника данных")
-    params: str | None = Field(default=None, description="JSON-параметры визуализации")
+    """Parameters for creating a new chart."""
+
+    slice_name: str = Field(description="Chart name")
+    viz_type: str = Field(description="Visualization type (table, bar, line, pie, etc.)")
+    datasource_id: int = Field(description="Dataset ID")
+    datasource_type: str = Field(default="table", description="Datasource type")
+    params: str | None = Field(default=None, description="JSON visualization parameters")
     query_context: str | None = Field(default=None, description="JSON query context")
-    dashboards: list[int] | None = Field(default=None, description="ID дашбордов для привязки")
+    dashboards: list[int] | None = Field(default=None, description="Dashboard IDs to associate with")
 
 
 class ChartUpdate(BaseModel):
-    slice_name: str | None = Field(default=None, description="Название графика")
-    viz_type: str | None = Field(default=None, description="Тип визуализации")
-    params: str | None = Field(default=None, description="JSON-параметры визуализации")
+    """Parameters for updating an existing chart."""
+
+    slice_name: str | None = Field(default=None, description="Chart name")
+    viz_type: str | None = Field(default=None, description="Visualization type")
+    params: str | None = Field(default=None, description="JSON visualization parameters")
     query_context: str | None = Field(default=None, description="JSON query context")
-    dashboards: list[int] | None = Field(default=None, description="ID дашбордов для привязки")
+    dashboards: list[int] | None = Field(default=None, description="Dashboard IDs to associate with")
 
 
 # === Database ===
 
 
 class DatabaseCreate(BaseModel):
-    database_name: str = Field(description="Название подключения")
-    sqlalchemy_uri: str = Field(description="SQLAlchemy URI строка подключения")
-    expose_in_sqllab: bool = Field(default=True, description="Доступна ли в SQL Lab")
-    allow_ctas: bool = Field(default=False, description="Разрешить CREATE TABLE AS")
-    allow_cvas: bool = Field(default=False, description="Разрешить CREATE VIEW AS")
-    allow_dml: bool = Field(default=False, description="Разрешить DML-операции")
-    allow_run_async: bool = Field(default=False, description="Разрешить асинхронные запросы")
-    extra: str | None = Field(default=None, description="JSON дополнительных настроек")
+    """Parameters for creating a new database connection."""
+
+    database_name: str = Field(description="Connection name")
+    sqlalchemy_uri: str = Field(description="SQLAlchemy connection URI")
+    expose_in_sqllab: bool = Field(default=True, description="Whether to expose in SQL Lab")
+    allow_ctas: bool = Field(default=False, description="Allow CREATE TABLE AS")
+    allow_cvas: bool = Field(default=False, description="Allow CREATE VIEW AS")
+    allow_dml: bool = Field(default=False, description="Allow DML operations")
+    allow_run_async: bool = Field(default=False, description="Allow asynchronous queries")
+    extra: str | None = Field(default=None, description="JSON extra settings")
 
 
 class DatabaseUpdate(BaseModel):
-    database_name: str | None = Field(default=None, description="Название подключения")
+    """Parameters for updating an existing database connection."""
+
+    database_name: str | None = Field(default=None, description="Connection name")
     sqlalchemy_uri: str | None = Field(default=None, description="SQLAlchemy URI")
-    expose_in_sqllab: bool | None = Field(default=None, description="Доступна ли в SQL Lab")
-    allow_ctas: bool | None = Field(default=None, description="Разрешить CREATE TABLE AS")
-    allow_cvas: bool | None = Field(default=None, description="Разрешить CREATE VIEW AS")
-    allow_dml: bool | None = Field(default=None, description="Разрешить DML-операции")
-    extra: str | None = Field(default=None, description="JSON дополнительных настроек")
+    expose_in_sqllab: bool | None = Field(default=None, description="Whether to expose in SQL Lab")
+    allow_ctas: bool | None = Field(default=None, description="Allow CREATE TABLE AS")
+    allow_cvas: bool | None = Field(default=None, description="Allow CREATE VIEW AS")
+    allow_dml: bool | None = Field(default=None, description="Allow DML operations")
+    extra: str | None = Field(default=None, description="JSON extra settings")
 
 
 # === Dataset ===
 
 
 class DatasetCreate(BaseModel):
-    table_name: str = Field(description="Название таблицы/вью")
-    database: int = Field(description="ID подключения к БД")
-    schema_name: str | None = Field(default=None, description="Схема (если не default)")
-    sql: str | None = Field(default=None, description="SQL-запрос для виртуального датасета")
+    """Parameters for creating a new dataset."""
+
+    table_name: str = Field(description="Table or view name")
+    database: int = Field(description="Database connection ID")
+    schema_name: str | None = Field(default=None, description="Schema (if not default)")
+    sql: str | None = Field(default=None, description="SQL query for virtual dataset")
 
 
 class DatasetUpdate(BaseModel):
-    table_name: str | None = Field(default=None, description="Название таблицы/вью")
-    sql: str | None = Field(default=None, description="SQL-запрос для виртуального датасета")
-    description: str | None = Field(default=None, description="Описание датасета")
-    columns: list[dict] | None = Field(default=None, description="Колонки датасета")
-    metrics: list[dict] | None = Field(default=None, description="Метрики датасета")
+    """Parameters for updating an existing dataset."""
+
+    table_name: str | None = Field(default=None, description="Table or view name")
+    sql: str | None = Field(default=None, description="SQL query for virtual dataset")
+    description: str | None = Field(default=None, description="Dataset description")
+    columns: list[dict] | None = Field(default=None, description="Dataset columns")
+    metrics: list[dict] | None = Field(default=None, description="Dataset metrics")
 
 
 # === SQL Lab ===
 
 
 class SQLQuery(BaseModel):
-    database_id: int = Field(description="ID подключения к БД")
-    sql: str = Field(description="SQL-запрос")
-    schema: str | None = Field(default=None, description="Схема для выполнения")
-    catalog: str | None = Field(default=None, description="Каталог для выполнения")
-    tab_name: str | None = Field(default=None, description="Название вкладки в SQL Lab")
-    template_params: str | None = Field(default=None, description="JSON-параметры шаблона Jinja")
+    """Parameters for executing a SQL query in SQL Lab."""
+
+    database_id: int = Field(description="Database connection ID")
+    sql: str = Field(description="SQL query")
+    schema: str | None = Field(default=None, description="Schema for execution")
+    catalog: str | None = Field(default=None, description="Catalog for execution")
+    tab_name: str | None = Field(default=None, description="Tab name in SQL Lab")
+    template_params: str | None = Field(default=None, description="JSON Jinja template parameters")
 
 
 class SavedQueryCreate(BaseModel):
-    label: str = Field(description="Название сохранённого запроса")
-    db_id: int = Field(description="ID подключения к БД")
-    sql: str = Field(description="SQL-запрос")
-    schema: str | None = Field(default=None, description="Схема")
-    description: str | None = Field(default=None, description="Описание")
+    """Parameters for creating a saved query."""
+
+    label: str = Field(description="Saved query name")
+    db_id: int = Field(description="Database connection ID")
+    sql: str = Field(description="SQL query")
+    schema: str | None = Field(default=None, description="Schema")
+    description: str | None = Field(default=None, description="Description")
 
 
 # === Security ===
 
 
 class UserCreate(BaseModel):
-    first_name: str = Field(description="Имя")
-    last_name: str = Field(description="Фамилия")
-    username: str = Field(description="Логин")
+    """Parameters for creating a new user."""
+
+    first_name: str = Field(description="First name")
+    last_name: str = Field(description="Last name")
+    username: str = Field(description="Username")
     email: str = Field(description="Email")
-    password: str = Field(description="Пароль")
-    roles: list[int] | None = Field(default=None, description="ID ролей")
-    active: bool = Field(default=True, description="Активен ли пользователь")
+    password: str = Field(description="Password")
+    roles: list[int] | None = Field(default=None, description="Role IDs")
+    active: bool = Field(default=True, description="Whether the user is active")
 
 
 class UserUpdate(BaseModel):
-    first_name: str | None = Field(default=None, description="Имя")
-    last_name: str | None = Field(default=None, description="Фамилия")
+    """Parameters for updating an existing user."""
+
+    first_name: str | None = Field(default=None, description="First name")
+    last_name: str | None = Field(default=None, description="Last name")
     email: str | None = Field(default=None, description="Email")
-    roles: list[int] | None = Field(default=None, description="ID ролей")
-    active: bool | None = Field(default=None, description="Активен ли пользователь")
+    roles: list[int] | None = Field(default=None, description="Role IDs")
+    active: bool | None = Field(default=None, description="Whether the user is active")
 
 
 class RoleCreate(BaseModel):
-    name: str = Field(description="Название роли")
+    """Parameters for creating a new role."""
+
+    name: str = Field(description="Role name")
 
 
 class RoleUpdate(BaseModel):
-    name: str = Field(description="Новое название роли")
+    """Parameters for updating an existing role."""
+
+    name: str = Field(description="New role name")
 
 
 class RLSRuleCreate(BaseModel):
-    name: str = Field(description="Название правила RLS")
-    filter_type: str = Field(default="Regular", description="Тип фильтра: Regular или Base")
-    clause: str = Field(description="SQL-условие (WHERE clause)")
-    tables: list[int] = Field(description="ID датасетов для применения")
-    roles: list[int] = Field(description="ID ролей для применения")
-    group_key: str | None = Field(default=None, description="Ключ группировки")
-    description: str | None = Field(default=None, description="Описание правила")
+    """Parameters for creating a Row Level Security rule."""
+
+    name: str = Field(description="RLS rule name")
+    filter_type: str = Field(default="Regular", description="Filter type: Regular or Base")
+    clause: str = Field(description="SQL condition (WHERE clause)")
+    tables: list[int] = Field(description="Dataset IDs to apply the rule to")
+    roles: list[int] = Field(description="Role IDs to apply the rule to")
+    group_key: str | None = Field(default=None, description="Group key")
+    description: str | None = Field(default=None, description="Rule description")
 
 
 class RLSRuleUpdate(BaseModel):
-    name: str | None = Field(default=None, description="Название правила RLS")
-    filter_type: str | None = Field(default=None, description="Тип фильтра")
-    clause: str | None = Field(default=None, description="SQL-условие")
-    tables: list[int] | None = Field(default=None, description="ID датасетов")
-    roles: list[int] | None = Field(default=None, description="ID ролей")
-    group_key: str | None = Field(default=None, description="Ключ группировки")
-    description: str | None = Field(default=None, description="Описание")
+    """Parameters for updating an existing RLS rule."""
+
+    name: str | None = Field(default=None, description="RLS rule name")
+    filter_type: str | None = Field(default=None, description="Filter type")
+    clause: str | None = Field(default=None, description="SQL condition")
+    tables: list[int] | None = Field(default=None, description="Dataset IDs")
+    roles: list[int] | None = Field(default=None, description="Role IDs")
+    group_key: str | None = Field(default=None, description="Group key")
+    description: str | None = Field(default=None, description="Description")
 
 
 # === Reports ===
 
 
 class ReportCreate(BaseModel):
-    name: str = Field(description="Название отчёта/алерта")
-    type: str = Field(default="Report", description="Тип: Report или Alert")
-    crontab: str = Field(description="Cron-расписание (напр. '0 9 * * *')")
-    dashboard: int | None = Field(default=None, description="ID дашборда")
-    chart: int | None = Field(default=None, description="ID графика")
-    database: int | None = Field(default=None, description="ID БД (для Alert)")
-    sql: str | None = Field(default=None, description="SQL-запрос (для Alert)")
-    recipients: list[dict] | None = Field(default=None, description="Получатели")
-    active: bool = Field(default=True, description="Активен ли")
+    """Parameters for creating a report or alert schedule."""
+
+    name: str = Field(description="Report/alert name")
+    type: str = Field(default="Report", description="Type: Report or Alert")
+    crontab: str = Field(description="Cron schedule (e.g. '0 9 * * *')")
+    dashboard: int | None = Field(default=None, description="Dashboard ID")
+    chart: int | None = Field(default=None, description="Chart ID")
+    database: int | None = Field(default=None, description="Database ID (for Alert)")
+    sql: str | None = Field(default=None, description="SQL query (for Alert)")
+    recipients: list[dict] | None = Field(default=None, description="Recipients")
+    active: bool = Field(default=True, description="Whether the report is active")
 
 
 class ReportUpdate(BaseModel):
-    name: str | None = Field(default=None, description="Название")
-    crontab: str | None = Field(default=None, description="Cron-расписание")
-    active: bool | None = Field(default=None, description="Активен ли")
-    recipients: list[dict] | None = Field(default=None, description="Получатели")
+    """Parameters for updating an existing report or alert."""
+
+    name: str | None = Field(default=None, description="Name")
+    crontab: str | None = Field(default=None, description="Cron schedule")
+    active: bool | None = Field(default=None, description="Whether the report is active")
+    recipients: list[dict] | None = Field(default=None, description="Recipients")

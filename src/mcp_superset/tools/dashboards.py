@@ -1,4 +1,4 @@
-"""Инструменты для управления дашбордами Superset."""
+"""Tools for managing Superset dashboards."""
 
 import base64
 import json
@@ -7,17 +7,17 @@ import uuid
 KPI_VIZ_TYPES = {"big_number_total", "big_number"}
 MIN_KPI_HEIGHT = 16  # 2 grid cells (1 cell = 8 units)
 
-# Типы фильтров, для которых нужен granularity_sqla на чартах
+# Filter types that require granularity_sqla on charts
 _TIME_FILTER_TYPES = {"filter_time", "filter_timecolumn", "filter_timegrain"}
 
 
 async def _ensure_datasets_filter_ready(client, dashboard_id: int) -> list[dict]:
-    """Устанавливает always_filter_main_dttm=True на всех датасетах дашборда.
+    """Set always_filter_main_dttm=True on all datasets of a dashboard.
 
-    Вызывается автоматически при создании/копировании дашборда и добавлении фильтров.
+    Called automatically when creating/copying a dashboard or adding filters.
 
     Returns:
-        list of {id, name, action} для обновлённых датасетов.
+        List of {id, name, action} for updated datasets.
     """
     updated = []
     try:
@@ -56,17 +56,17 @@ async def _auto_fix_charts_for_filter(
     filter_column: str,
     filter_type: str,
 ) -> dict:
-    """Автоматически настраивает ВСЕ чарты дашборда для работы с фильтром.
+    """Automatically configure ALL charts of a dashboard to work with a filter.
 
-    Для ЛЮБОГО типа фильтра:
-    1. Устанавливает granularity_sqla на чартах без него (для работы time range).
-       - Для time-фильтров: берёт колонку фильтра.
-       - Для прочих (select, range): берёт main_dttm_col из датасета чарта.
-    2. Проверяет что колонка фильтра существует в датасете каждого чарта.
-       Если нет — добавляет предупреждение (фильтр не повлияет на этот чарт).
+    For ANY filter type:
+    1. Sets granularity_sqla on charts that lack it (required for time range).
+       - For time filters: uses the filter column.
+       - For other types (select, range): uses main_dttm_col from the chart's dataset.
+    2. Checks that the filter column exists in each chart's dataset.
+       If not, adds a warning (the filter won't affect that chart).
 
     Returns:
-        dict: charts_updated, charts_already_ok, column_warnings, warnings.
+        dict with keys: charts_updated, charts_already_ok, column_warnings, warnings.
     """
     result = {
         "charts_updated": [],
@@ -83,7 +83,7 @@ async def _auto_fix_charts_for_filter(
     except Exception:
         return result
 
-    # Кеш датасетов: ds_id -> {main_dttm_col, column_names}
+    # Dataset cache: ds_id -> {main_dttm_col, column_names}
     ds_cache: dict[int, dict] = {}
 
     async def _get_dataset_info(ds_id: int) -> dict:
@@ -112,13 +112,13 @@ async def _auto_fix_charts_for_filter(
             chart_resp = await client.get(f"/api/v1/chart/{chart_id}")
             chart = chart_resp.get("result", {})
         except Exception:
-            result["warnings"].append(f"chart {chart_id}: не удалось получить")
+            result["warnings"].append(f"chart {chart_id}: failed to fetch")
             continue
 
         chart_name = chart.get("slice_name", "?")
         ds_id = chart.get("datasource_id")
 
-        # --- Проверка колонки фильтра в датасете чарта ---
+        # --- Check if filter column exists in the chart's dataset ---
         if ds_id and not is_time_filter:
             ds_info = await _get_dataset_info(ds_id)
             if filter_column not in ds_info["column_names"]:
@@ -130,9 +130,9 @@ async def _auto_fix_charts_for_filter(
                         "dataset_name": ds_info["table_name"],
                         "missing_column": filter_column,
                         "message": (
-                            f"Фильтр по '{filter_column}' НЕ повлияет на чарт "
-                            f"'{chart_name}' (ID={chart_id}): колонка отсутствует "
-                            f"в датасете '{ds_info['table_name']}' (ID={ds_id})"
+                            f"Filter on '{filter_column}' will NOT affect chart "
+                            f"'{chart_name}' (ID={chart_id}): column is missing "
+                            f"from dataset '{ds_info['table_name']}' (ID={ds_id})"
                         ),
                     }
                 )
@@ -155,18 +155,18 @@ async def _auto_fix_charts_for_filter(
             )
             continue
 
-        # Определяем колонку для granularity_sqla
+        # Determine the column for granularity_sqla
         if is_time_filter:
             sqla_col = filter_column
         else:
-            # Для non-time фильтров: берём main_dttm_col из датасета
+            # For non-time filters: use main_dttm_col from the dataset
             ds_info = await _get_dataset_info(ds_id) if ds_id else {}
             sqla_col = ds_info.get("main_dttm_col")
             if not sqla_col:
                 result["warnings"].append(
-                    f"chart {chart_id} ({chart_name}): нет granularity_sqla "
-                    f"и main_dttm_col не задан в датасете — time range "
-                    f"фильтр не будет работать для этого чарта"
+                    f"chart {chart_id} ({chart_name}): no granularity_sqla "
+                    f"and main_dttm_col is not set on the dataset — time range "
+                    f"filter will not work for this chart"
                 )
                 continue
 
@@ -186,19 +186,22 @@ async def _auto_fix_charts_for_filter(
                 }
             )
         except Exception as e:
-            result["warnings"].append(f"chart {chart_id} ({chart_name}): ошибка обновления granularity_sqla: {e}")
+            result["warnings"].append(f"chart {chart_id} ({chart_name}): error updating granularity_sqla: {e}")
 
     return result
 
 
 def register_dashboard_tools(mcp):
+    """Register all dashboard-related MCP tools."""
+
     from mcp_superset.server import superset_client as client
     from mcp_superset.tools.helpers import auto_sync_dashboard_access
 
     async def _validate_kpi_height(position: dict) -> str | None:
-        """Проверяет что KPI-чарты (big_number_total/big_number) имеют высоту >= 2 клеток.
+        """Validate that KPI charts (big_number_total/big_number) have height >= 2 grid cells.
 
-        Возвращает сообщение об ошибке или None если всё OK.
+        Returns:
+            Error message string, or None if validation passes.
         """
         small_charts = {}  # chartId -> height
         for v in position.values():
@@ -225,13 +228,13 @@ def register_dashboard_tools(mcp):
 
         if kpi_violations:
             details = ", ".join(
-                f"chart_id={cid} (viz_type={vt}, height={h}, минимум={MIN_KPI_HEIGHT})" for cid, h, vt in kpi_violations
+                f"chart_id={cid} (viz_type={vt}, height={h}, minimum={MIN_KPI_HEIGHT})" for cid, h, vt in kpi_violations
             )
             return (
-                f"ОТКЛОНЕНО: KPI-чарты (big_number_total/big_number) требуют минимум "
-                f"2 клетки высоты (height >= {MIN_KPI_HEIGHT}) в position_json. "
-                f"Нарушения: {details}. "
-                f"Исправьте height на {MIN_KPI_HEIGHT} или больше."
+                f"REJECTED: KPI charts (big_number_total/big_number) require at least "
+                f"2 grid cells of height (height >= {MIN_KPI_HEIGHT}) in position_json. "
+                f"Violations: {details}. "
+                f"Fix height to {MIN_KPI_HEIGHT} or greater."
             )
         return None
 
@@ -242,19 +245,19 @@ def register_dashboard_tools(mcp):
         q: str | None = None,
         get_all: bool = False,
     ) -> str:
-        """Получить список дашбордов Superset с пагинацией.
+        """List Superset dashboards with pagination.
 
-        ВАЖНО: всегда вызывайте этот инструмент перед dashboard_get,
-        чтобы узнать актуальные ID дашбордов.
+        IMPORTANT: always call this tool before dashboard_get
+        to find out the current dashboard IDs.
 
         Args:
-            page: Номер страницы (начиная с 0).
-            page_size: Количество записей на странице (макс. 100).
-            q: RISON-фильтр для поиска. Примеры:
-                - По названию: (filters:!((col:dashboard_title,opr:ct,value:поиск)))
-                - По владельцу: (filters:!((col:owners,opr:rel_m_m,value:1)))
-                - Только опубликованные: (filters:!((col:published,opr:eq,value:!t)))
-            get_all: Получить ВСЕ записи с автоматической пагинацией (игнорирует page/page_size).
+            page: Page number (starting from 0).
+            page_size: Number of records per page (max 100).
+            q: RISON filter for search. Examples:
+                - By title: (filters:!((col:dashboard_title,opr:ct,value:search)))
+                - By owner: (filters:!((col:owners,opr:rel_m_m,value:1)))
+                - Published only: (filters:!((col:published,opr:eq,value:!t)))
+            get_all: Fetch ALL records with automatic pagination (ignores page/page_size).
         """
         if get_all:
             params = {}
@@ -270,13 +273,13 @@ def register_dashboard_tools(mcp):
 
     @mcp.tool
     async def superset_dashboard_get(dashboard_id: int) -> str:
-        """Получить детальную информацию о дашборде по ID.
+        """Get detailed information about a dashboard by ID.
 
-        ВАЖНО: если ID неизвестен, сначала вызовите superset_dashboard_list,
-        чтобы найти нужный дашборд. Несуществующий ID вернёт 404.
+        IMPORTANT: if the ID is unknown, first call superset_dashboard_list
+        to find the desired dashboard. A non-existent ID will return 404.
 
         Args:
-            dashboard_id: ID дашборда (целое число из результата dashboard_list).
+            dashboard_id: Dashboard ID (integer from dashboard_list result).
         """
         result = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         return json.dumps(result, ensure_ascii=False)
@@ -291,24 +294,24 @@ def register_dashboard_tools(mcp):
         position_json: str | None = None,
         roles: list[int] | None = None,
     ) -> str:
-        """Создать новый дашборд.
+        """Create a new dashboard.
 
-        ВАЖНО: при указании roles автоматически синхронизируются datasource_access
-        для указанных ролей — каждая роль получит доступ ко всем датасетам дашборда.
+        IMPORTANT: when roles are specified, datasource_access is automatically
+        synced for the given roles — each role will get access to all dashboard datasets.
 
         Args:
-            dashboard_title: Название дашборда (отображается в UI).
-            slug: URL-slug для красивой ссылки (напр. "my-dashboard"). Должен быть уникальным.
-            published: Опубликовать сразу (по умолчанию False — черновик).
-            json_metadata: JSON-строка с метаданными дашборда. Содержит настройки фильтров,
-                цветовой палитры, refresh-интервала. Для пустых метаданных используйте "{}".
-            css: Пользовательский CSS для стилизации дашборда.
-            position_json: JSON-строка с позиционированием виджетов на дашборде.
-                Определяет расположение графиков, заголовков, разделителей в сетке.
-            roles: Список ID ролей, которым доступен дашборд. Пользователи без
-                одной из этих ролей НЕ увидят дашборд. Пустой список = доступен всем.
+            dashboard_title: Dashboard title (displayed in the UI).
+            slug: URL slug for a pretty link (e.g. "my-dashboard"). Must be unique.
+            published: Publish immediately (default False — draft).
+            json_metadata: JSON string with dashboard metadata. Contains filter settings,
+                color palette, refresh interval. Use "{}" for empty metadata.
+            css: Custom CSS for dashboard styling.
+            position_json: JSON string with widget positioning on the dashboard.
+                Defines the layout of charts, headers, dividers in the grid.
+            roles: List of role IDs that can access the dashboard. Users without
+                one of these roles will NOT see the dashboard. Empty list = accessible to all.
         """
-        # Валидация высоты KPI-чартов в position_json
+        # Validate KPI chart height in position_json
         if position_json is not None:
             pos = json.loads(position_json) if isinstance(position_json, str) else position_json
             kpi_error = await _validate_kpi_height(pos)
@@ -330,8 +333,8 @@ def register_dashboard_tools(mcp):
             payload["roles"] = roles
         result = await client.post("/api/v1/dashboard/", json_data=payload)
 
-        # Автоматика: если дашборд создан с чартами — включить
-        # always_filter_main_dttm на всех датасетах
+        # Auto: if dashboard was created with charts — enable
+        # always_filter_main_dttm on all datasets
         new_id = result.get("id")
         datasets_auto = []
         if new_id and position_json:
@@ -340,7 +343,7 @@ def register_dashboard_tools(mcp):
         if datasets_auto:
             result["_auto_datasets_updated"] = datasets_auto
 
-        # Автоматика: синхронизировать datasource_access для ролей дашборда
+        # Auto: sync datasource_access for dashboard roles
         if new_id:
             sync = await auto_sync_dashboard_access(client, new_id)
             if sync.get("synced_roles"):
@@ -360,63 +363,63 @@ def register_dashboard_tools(mcp):
         owners: list[int] | None = None,
         roles: list[int] | None = None,
     ) -> str:
-        """Обновить существующий дашборд. Передавайте только изменяемые поля.
+        """Update an existing dashboard. Pass only the fields to change.
 
-        ВАЖНО: после обновления автоматически синхронизируются datasource_access —
-        каждая роль из dashboard.roles получит доступ ко всем датасетам дашборда.
+        IMPORTANT: after the update, datasource_access is automatically synced —
+        each role from dashboard.roles will get access to all dashboard datasets.
 
         Args:
-            dashboard_id: ID дашборда для обновления.
-            dashboard_title: Новое название.
-            slug: Новый URL-slug (должен быть уникальным).
-            published: Изменить статус публикации (true — опубликован, false — черновик).
-            json_metadata: JSON-метаданные дашборда (строка или объект, перезаписывают полностью).
-            css: Новый пользовательский CSS для дашборда.
-                Инъектируется как <style> тег на странице дашборда.
-                НЕ влияет на Explore view (редактор чарта) — только на дашборд.
+            dashboard_id: ID of the dashboard to update.
+            dashboard_title: New title.
+            slug: New URL slug (must be unique).
+            published: Change publication status (true — published, false — draft).
+            json_metadata: Dashboard JSON metadata (string or object, fully replaced).
+            css: New custom CSS for the dashboard.
+                Injected as a <style> tag on the dashboard page.
+                Does NOT affect Explore view (chart editor) — only the dashboard.
 
-                Типовые CSS-фиксы:
+                Common CSS fixes:
 
-                  1) KPI big_number_total — размер цифр и скролл:
-                  Контейнер KPI имеет фиксированную высоту (~60px при 2 клетках).
-                  По умолчанию шрифт мелкий. Для увеличения через CSS:
+                  1) KPI big_number_total — digit size and scroll:
+                  KPI container has a fixed height (~60px at 2 cells).
+                  Default font is small. To enlarge via CSS:
                     div[class*="big_number"] .header-line {
-                      font-size: 3.3rem !important;  /* цифры */
+                      font-size: 3.3rem !important;  /* digits */
                       font-weight: 700 !important;
                       line-height: 1.1 !important;
-                      margin-bottom: 0 !important;  /* ОБЯЗАТЕЛЬНО! иначе скролл */
+                      margin-bottom: 0 !important;  /* REQUIRED! otherwise scroll */
                     }
                     div[class*="big_number"] .subheader-line {
-                      font-size: 1rem !important;  /* надпись */
+                      font-size: 1rem !important;  /* label */
                       font-weight: 400 !important;
                       opacity: 0.7;
                     }
-                  ВАЖНО: margin-bottom у .header-line по умолчанию 8px — вместе с
-                  line-height вызывает overflow и скролл. Формула проверки:
+                  IMPORTANT: margin-bottom on .header-line defaults to 8px — together with
+                  line-height causes overflow and scroll. Verification formula:
                   font_size_px * 1.1 + margin_bottom <= 60px.
-                  3.3rem = 52.8px → 52.8 * 1.1 = 58px + 0 = 58px < 60px ✓
+                  3.3rem = 52.8px -> 52.8 * 1.1 = 58px + 0 = 58px < 60px OK
 
-                  2) Country Map tooltip обрезается контейнером — виновник
-                  DIV.dashboard-chart (styled-component с overflow:hidden).
-                  Tooltip = DIV.hover-popup (НЕ .datamaps-hoverover!). Фикс:
+                  2) Country Map tooltip clipped by container — culprit is
+                  DIV.dashboard-chart (styled-component with overflow:hidden).
+                  Tooltip = DIV.hover-popup (NOT .datamaps-hoverover!). Fix:
                     .dashboard-chart-id-{N} .dashboard-chart {
                       overflow: visible !important;
                     }
                     .hover-popup { z-index: 99999 !important; }
 
-                  Для анализа CSS-проблем: открыть дашборд в Playwright,
-                  найти элемент чарта, пройти вверх по parentElement,
-                  проверить getComputedStyle(el).overflow на каждом уровне.
+                  To analyze CSS issues: open the dashboard in Playwright,
+                  find the chart element, walk up parentElement,
+                  check getComputedStyle(el).overflow at each level.
 
-            position_json: Позиционирование виджетов на дашборде (строка или объект).
-                Определяет расположение графиков, заголовков, разделителей в сетке.
-                ВАЖНО: перезаписывает полностью — сначала получите текущий layout
-                через dashboard_get, измените нужные элементы и передайте весь JSON.
-            owners: Список ID пользователей-владельцев (ЗАМЕНЯЕТ всех текущих владельцев).
-            roles: Список ID ролей для доступа к дашборду (ЗАМЕНЯЕТ текущие).
-                При изменении автоматически синхронизируются datasource_access.
+            position_json: Widget positioning on the dashboard (string or object).
+                Defines the layout of charts, headers, dividers in the grid.
+                IMPORTANT: fully replaced — first get current layout via
+                dashboard_get, modify needed elements and pass the entire JSON.
+            owners: List of owner user IDs (REPLACES all current owners).
+            roles: List of role IDs for dashboard access (REPLACES current ones).
+                On change, datasource_access is automatically synced.
         """
-        # Валидация высоты KPI-чартов в position_json
+        # Validate KPI chart height in position_json
         if position_json is not None:
             pos = json.loads(position_json) if isinstance(position_json, str) else position_json
             kpi_error = await _validate_kpi_height(pos)
@@ -446,7 +449,7 @@ def register_dashboard_tools(mcp):
             payload["roles"] = roles
         result = await client.put(f"/api/v1/dashboard/{dashboard_id}", json_data=payload)
 
-        # Автоматика: синхронизировать datasource_access для ролей дашборда
+        # Auto: sync datasource_access for dashboard roles
         sync = await auto_sync_dashboard_access(client, dashboard_id)
         if sync.get("synced_roles"):
             result["_auto_access_synced"] = sync["synced_roles"]
@@ -455,22 +458,22 @@ def register_dashboard_tools(mcp):
 
     @mcp.tool
     async def superset_dashboard_publish(dashboard_id: int) -> str:
-        """Опубликовать дашборд (сделать видимым для пользователей с правами).
+        """Publish a dashboard (make it visible to users with appropriate permissions).
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         await client.put(f"/api/v1/dashboard/{dashboard_id}", json_data={"published": True})
         return json.dumps({"status": "ok", "dashboard_id": dashboard_id, "published": True}, ensure_ascii=False)
 
     @mcp.tool
     async def superset_dashboard_unpublish(dashboard_id: int) -> str:
-        """Снять дашборд с публикации (перевести в черновик).
+        """Unpublish a dashboard (convert to draft).
 
-        Дашборд останется доступен владельцам и админам, но скроется из общего списка.
+        The dashboard will remain accessible to owners and admins but will be hidden from the general list.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         await client.put(f"/api/v1/dashboard/{dashboard_id}", json_data={"published": False})
         return json.dumps({"status": "ok", "dashboard_id": dashboard_id, "published": False}, ensure_ascii=False)
@@ -480,13 +483,13 @@ def register_dashboard_tools(mcp):
         dashboard_id: int,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить дашборд по ID. Графики и датасеты НЕ удаляются — только сам дашборд.
+        """Delete a dashboard by ID. Charts and datasets are NOT deleted — only the dashboard itself.
 
-        КРИТИЧНО: дашборд будет удалён безвозвратно.
+        CRITICAL: the dashboard will be permanently deleted.
 
         Args:
-            dashboard_id: ID дашборда для удаления.
-            confirm_delete: Подтверждение удаления (ОБЯЗАТЕЛЬНО).
+            dashboard_id: ID of the dashboard to delete.
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         if not confirm_delete:
             try:
@@ -505,11 +508,11 @@ def register_dashboard_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление дашборда '{title}'"
+                        f"REJECTED: deletion of dashboard '{title}'"
                         f"{f' (slug={slug})' if slug else ''} "
                         f"(ID={dashboard_id}, published={published}, "
-                        f"чартов={charts_count}). "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"charts={charts_count}). "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -524,13 +527,13 @@ def register_dashboard_tools(mcp):
         dashboard_title: str,
         json_metadata: str | None = None,
     ) -> str:
-        """Создать копию существующего дашборда со всеми графиками.
+        """Create a copy of an existing dashboard with all its charts.
 
         Args:
-            dashboard_id: ID исходного дашборда для копирования.
-            dashboard_title: Название новой копии.
-            json_metadata: JSON-метаданные для копии.
-                ВАЖНО: Superset требует это поле. Если не указано, будет передано "{}".
+            dashboard_id: ID of the source dashboard to copy.
+            dashboard_title: Title for the new copy.
+            json_metadata: JSON metadata for the copy.
+                IMPORTANT: Superset requires this field. If not provided, "{}" will be used.
         """
         payload = {
             "dashboard_title": dashboard_title,
@@ -541,7 +544,7 @@ def register_dashboard_tools(mcp):
             json_data=payload,
         )
 
-        # Автоматика: включить always_filter_main_dttm на всех датасетах копии
+        # Auto: enable always_filter_main_dttm on all datasets of the copy
         new_id = result.get("id")
         datasets_auto = []
         if new_id:
@@ -549,7 +552,7 @@ def register_dashboard_tools(mcp):
         if datasets_auto:
             result["_auto_datasets_updated"] = datasets_auto
 
-        # Автоматика: синхронизировать datasource_access для ролей копии
+        # Auto: sync datasource_access for roles of the copy
         if new_id:
             sync = await auto_sync_dashboard_access(client, new_id)
             if sync.get("synced_roles"):
@@ -559,24 +562,24 @@ def register_dashboard_tools(mcp):
 
     @mcp.tool
     async def superset_dashboard_charts(dashboard_id: int) -> str:
-        """Получить список всех графиков (charts), размещённых на дашборде.
+        """Get the list of all charts placed on a dashboard.
 
-        Возвращает ID и названия графиков. Полезно для анализа содержимого дашборда.
+        Returns chart IDs and names. Useful for analyzing dashboard contents.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         result = await client.get(f"/api/v1/dashboard/{dashboard_id}/charts")
         return json.dumps(result, ensure_ascii=False)
 
     @mcp.tool
     async def superset_dashboard_datasets(dashboard_id: int) -> str:
-        """Получить список всех датасетов, используемых графиками дашборда.
+        """Get the list of all datasets used by a dashboard's charts.
 
-        Полезно для понимания зависимостей дашборда от источников данных.
+        Useful for understanding the dashboard's dependencies on data sources.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         result = await client.get(f"/api/v1/dashboard/{dashboard_id}/datasets")
         return json.dumps(result, ensure_ascii=False)
@@ -585,13 +588,13 @@ def register_dashboard_tools(mcp):
     async def superset_dashboard_export(
         dashboard_ids: str,
     ) -> str:
-        """Экспортировать дашборды со всеми зависимостями (графики, датасеты, БД) в ZIP.
+        """Export dashboards with all dependencies (charts, datasets, databases) as a ZIP.
 
-        Результат — base64-кодированный ZIP-файл. Можно импортировать обратно
-        через superset_dashboard_import.
+        The result is a base64-encoded ZIP file. It can be imported back
+        via superset_dashboard_import.
 
         Args:
-            dashboard_ids: ID дашбордов через запятую (напр. "1,2,3").
+            dashboard_ids: Comma-separated dashboard IDs (e.g. "1,2,3").
 
         Returns:
             JSON: {"format": "zip", "encoding": "base64", "data": "...", "size_bytes": N}
@@ -613,13 +616,13 @@ def register_dashboard_tools(mcp):
         file_path: str,
         overwrite: bool = False,
     ) -> str:
-        """Импортировать дашборды из ZIP-файла (созданного через export).
+        """Import dashboards from a ZIP file (created via export).
 
-        ZIP должен содержать YAML-файлы с конфигурацией дашбордов и зависимостей.
+        The ZIP should contain YAML files with dashboard and dependency configurations.
 
         Args:
-            file_path: Абсолютный путь к ZIP-файлу на диске.
-            overwrite: Перезаписать существующие объекты с такими же UUID (по умолчанию False).
+            file_path: Absolute path to the ZIP file on disk.
+            overwrite: Overwrite existing objects with the same UUID (default False).
         """
         with open(file_path, "rb") as f:
             files = {"formData": (file_path.split("/")[-1], f, "application/zip")}
@@ -633,12 +636,12 @@ def register_dashboard_tools(mcp):
 
     @mcp.tool
     async def superset_dashboard_embedded_get(dashboard_id: int) -> str:
-        """Получить настройки встраивания (embedded) дашборда.
+        """Get the embedding (embedded) settings of a dashboard.
 
-        ВАЖНО: вернёт 404, если embedded mode не был настроен через embedded_set.
+        IMPORTANT: will return 404 if embedded mode has not been configured via embedded_set.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         result = await client.get(f"/api/v1/dashboard/{dashboard_id}/embedded")
         return json.dumps(result, ensure_ascii=False)
@@ -648,14 +651,14 @@ def register_dashboard_tools(mcp):
         dashboard_id: int,
         allowed_domains: list[str] | None = None,
     ) -> str:
-        """Включить встраивание дашборда (embedded mode) и настроить разрешённые домены.
+        """Enable dashboard embedding (embedded mode) and configure allowed domains.
 
-        После включения дашборд можно встраивать через iframe на указанных доменах.
+        Once enabled, the dashboard can be embedded via iframe on the specified domains.
 
         Args:
-            dashboard_id: ID дашборда.
-            allowed_domains: Список доменов, на которых разрешено встраивание
-                (напр. ["example.com", "app.example.com"]). Пустой список = все домены.
+            dashboard_id: Dashboard ID.
+            allowed_domains: List of domains where embedding is allowed
+                (e.g. ["example.com", "app.example.com"]). Empty list = all domains.
         """
         payload = {}
         if allowed_domains is not None:
@@ -668,31 +671,31 @@ def register_dashboard_tools(mcp):
 
     @mcp.tool
     async def superset_dashboard_embedded_delete(dashboard_id: int) -> str:
-        """Отключить встраивание (embedded mode) дашборда.
+        """Disable dashboard embedding (embedded mode).
 
-        После отключения дашборд больше нельзя встраивать через iframe.
+        After disabling, the dashboard can no longer be embedded via iframe.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         result = await client.delete(f"/api/v1/dashboard/{dashboard_id}/embedded")
         return json.dumps(result, ensure_ascii=False)
 
-    # --- Инструменты для native-фильтров дашборда ---
+    # --- Dashboard native filter tools ---
 
     def _extract_chart_ids(position: dict) -> list[int]:
-        """Извлекает ID чартов из position_json дашборда."""
+        """Extract chart IDs from a dashboard's position_json."""
         return [v["meta"]["chartId"] for v in position.values() if isinstance(v, dict) and v.get("type") == "CHART"]
 
     @mcp.tool
     async def superset_dashboard_filter_list(dashboard_id: int) -> str:
-        """Получить список native-фильтров дашборда в читаемом формате.
+        """Get a list of native filters on a dashboard in a readable format.
 
-        Парсит json_metadata и возвращает конфигурацию каждого фильтра:
-        ID, название, тип, колонку, датасет, chartsInScope, controlValues.
+        Parses json_metadata and returns configuration of each filter:
+        ID, name, type, column, dataset, chartsInScope, controlValues.
 
         Args:
-            dashboard_id: ID дашборда.
+            dashboard_id: Dashboard ID.
         """
         dashboard = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         result = dashboard.get("result", {})
@@ -732,23 +735,23 @@ def register_dashboard_tools(mcp):
         enable_empty_filter: bool = False,
         cascade_parent_id: str | None = None,
     ) -> str:
-        """Добавить native-фильтр на дашборд с правильными defaults.
+        """Add a native filter to a dashboard with correct defaults.
 
-        Автоматически заполняет chartsInScope всеми чартами дашборда,
-        формирует корректные scope, defaultDataMask, cascadeParentIds.
-        ID фильтра генерируется в формате NATIVE_FILTER-<uuid> — это ОБЯЗАТЕЛЬНО
-        для Superset 6.0.1 (кастомные ID фронтенд молча игнорирует).
+        Automatically populates chartsInScope with all dashboard charts,
+        builds correct scope, defaultDataMask, and cascadeParentIds.
+        Filter ID is generated in NATIVE_FILTER-<uuid> format — this is REQUIRED
+        for Superset 6.0.1 (custom IDs are silently ignored by the frontend).
 
         Args:
-            dashboard_id: ID дашборда.
-            name: Отображаемое название фильтра (напр. "ФИО").
-            column: Имя колонки датасета для фильтрации (напр. "full_name").
-            dataset_id: ID датасета, из которого берутся значения фильтра.
-            filter_type: Тип фильтра: "filter_select", "filter_time", "filter_range".
-            multi_select: Множественный выбор (по умолчанию True).
-            search_all_options: Поиск по всем значениям, не только загруженным (для больших списков).
-            enable_empty_filter: Пустой фильтр = фильтрация по NULL.
-            cascade_parent_id: ID родительского фильтра для каскадной связи.
+            dashboard_id: Dashboard ID.
+            name: Display name of the filter (e.g. "Full Name").
+            column: Dataset column name for filtering (e.g. "full_name").
+            dataset_id: ID of the dataset providing filter values.
+            filter_type: Filter type: "filter_select", "filter_time", "filter_range".
+            multi_select: Allow multiple selection (default True).
+            search_all_options: Search all values, not just loaded ones (for large lists).
+            enable_empty_filter: Empty filter means filtering by NULL.
+            cascade_parent_id: ID of the parent filter for cascading.
         """
         dashboard = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         result = dashboard.get("result", {})
@@ -794,19 +797,19 @@ def register_dashboard_tools(mcp):
             },
         )
 
-        # === Автоматика: настроить датасеты и чарты для работы фильтра ===
+        # === Auto: configure datasets and charts for filter operation ===
         response = {
             "status": "ok",
             "filter_id": filter_id,
             "chartsInScope": chart_ids,
         }
 
-        # 1. always_filter_main_dttm на всех датасетах
+        # 1. always_filter_main_dttm on all datasets
         datasets_auto = await _ensure_datasets_filter_ready(client, dashboard_id)
         if datasets_auto:
             response["_auto_datasets_updated"] = datasets_auto
 
-        # 2. granularity_sqla на чартах + проверка совместимости колонок
+        # 2. granularity_sqla on charts + column compatibility check
         charts_auto = await _auto_fix_charts_for_filter(client, dashboard_id, column, filter_type)
         if charts_auto["charts_updated"]:
             response["_auto_charts_updated"] = charts_auto["charts_updated"]
@@ -828,17 +831,17 @@ def register_dashboard_tools(mcp):
         enable_empty_filter: bool | None = None,
         cascade_parent_id: str | None = None,
     ) -> str:
-        """Обновить native-фильтр дашборда по ID. Передавайте только изменяемые поля.
+        """Update a native filter on a dashboard by ID. Pass only the fields to change.
 
         Args:
-            dashboard_id: ID дашборда.
-            filter_id: ID фильтра (формат "NATIVE_FILTER-<uuid>").
-            name: Новое название фильтра.
-            column: Новая колонка для фильтрации.
-            multi_select: Множественный выбор.
-            search_all_options: Поиск по всем значениям.
-            enable_empty_filter: Пустой фильтр = NULL.
-            cascade_parent_id: ID родительского фильтра (None — убрать каскад).
+            dashboard_id: Dashboard ID.
+            filter_id: Filter ID (format "NATIVE_FILTER-<uuid>").
+            name: New filter name.
+            column: New column for filtering.
+            multi_select: Multiple selection.
+            search_all_options: Search all values.
+            enable_empty_filter: Empty filter = NULL.
+            cascade_parent_id: Parent filter ID (None — remove cascading).
         """
         dashboard = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         result = dashboard.get("result", {})
@@ -853,7 +856,7 @@ def register_dashboard_tools(mcp):
 
         if not target:
             return json.dumps(
-                {"status": "error", "message": f"Фильтр {filter_id} не найден"},
+                {"status": "error", "message": f"Filter {filter_id} not found"},
                 ensure_ascii=False,
             )
 
@@ -887,12 +890,12 @@ def register_dashboard_tools(mcp):
         filter_id: str,
         confirm_delete: bool = False,
     ) -> str:
-        """Удалить native-фильтр с дашборда по ID.
+        """Delete a native filter from a dashboard by ID.
 
         Args:
-            dashboard_id: ID дашборда.
-            filter_id: ID фильтра для удаления (формат "NATIVE_FILTER-<uuid>").
-            confirm_delete: Подтверждение удаления фильтра (ОБЯЗАТЕЛЬНО).
+            dashboard_id: Dashboard ID.
+            filter_id: ID of the filter to delete (format "NATIVE_FILTER-<uuid>").
+            confirm_delete: Deletion confirmation (REQUIRED).
         """
         dashboard = await client.get(f"/api/v1/dashboard/{dashboard_id}")
         result = dashboard.get("result", {})
@@ -907,7 +910,7 @@ def register_dashboard_tools(mcp):
 
         if not target:
             return json.dumps(
-                {"status": "error", "message": f"Фильтр {filter_id} не найден"},
+                {"status": "error", "message": f"Filter {filter_id} not found"},
                 ensure_ascii=False,
             )
 
@@ -915,10 +918,10 @@ def register_dashboard_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: удаление фильтра '{target.get('name', '?')}' "
-                        f"(ID={filter_id}) с дашборда {dashboard_id}. "
-                        f"Всего фильтров на дашборде: {len(filters)}. "
-                        f"Передайте confirm_delete=True для подтверждения."
+                        f"REJECTED: deletion of filter '{target.get('name', '?')}' "
+                        f"(ID={filter_id}) from dashboard {dashboard_id}. "
+                        f"Total filters on dashboard: {len(filters)}. "
+                        f"Pass confirm_delete=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -944,30 +947,30 @@ def register_dashboard_tools(mcp):
         filters_json: str,
         confirm_reset: bool = False,
     ) -> str:
-        """Пересоздать ВСЕ native-фильтры дашборда с правильными defaults.
+        """Recreate ALL native filters on a dashboard with correct defaults.
 
-        Удаляет все текущие фильтры и создаёт новые по списку.
-        Автоматически заполняет chartsInScope, scope, defaultDataMask, cascadeParentIds.
+        Deletes all current filters and creates new ones from the provided list.
+        Automatically populates chartsInScope, scope, defaultDataMask, cascadeParentIds.
 
-        КРИТИЧНО: все текущие фильтры будут УДАЛЕНЫ и заменены новыми.
+        CRITICAL: all current filters will be DELETED and replaced with new ones.
 
         Args:
-            dashboard_id: ID дашборда.
-            dataset_id: ID датасета для всех фильтров.
-            filters_json: JSON-массив описаний фильтров. Каждый элемент:
-            confirm_reset: Подтверждение сброса фильтров (ОБЯЗАТЕЛЬНО).
+            dashboard_id: Dashboard ID.
+            dataset_id: Dataset ID for all filters.
+            filters_json: JSON array of filter definitions. Each element:
+            confirm_reset: Filter reset confirmation (REQUIRED).
                 {
-                    "name": "ФИО",
+                    "name": "Full Name",
                     "column": "full_name",
                     "type": "filter_select",       // filter_select | filter_time | filter_range
-                    "multi_select": true,           // необязательно, default true
-                    "search_all_options": false,     // необязательно, default false
-                    "enable_empty_filter": false,    // необязательно, default false
-                    "cascade_parent_id": null        // необязательно, ID родительского фильтра
+                    "multi_select": true,           // optional, default true
+                    "search_all_options": false,     // optional, default false
+                    "enable_empty_filter": false,    // optional, default false
+                    "cascade_parent_id": null        // optional, parent filter ID
                 }
         """
         if not confirm_reset:
-            # Показываем текущие фильтры для информированного решения
+            # Show current filters for an informed decision
             dashboard = await client.get(f"/api/v1/dashboard/{dashboard_id}")
             result = dashboard.get("result", {})
             metadata = json.loads(result.get("json_metadata", "{}"))
@@ -976,9 +979,9 @@ def register_dashboard_tools(mcp):
             return json.dumps(
                 {
                     "error": (
-                        f"ОТКЛОНЕНО: filter_reset удалит {len(current_filters)} "
-                        f"текущих фильтров: {current_names} и заменит новыми. "
-                        f"Передайте confirm_reset=True для подтверждения."
+                        f"REJECTED: filter_reset will delete {len(current_filters)} "
+                        f"current filters: {current_names} and replace with new ones. "
+                        f"Pass confirm_reset=True to confirm."
                     )
                 },
                 ensure_ascii=False,
@@ -1042,14 +1045,14 @@ def register_dashboard_tools(mcp):
             "filter_ids": [f["id"] for f in new_filters],
         }
 
-        # === Автоматика: настроить датасеты и чарты для работы фильтров ===
-        # 1. always_filter_main_dttm на всех датасетах
+        # === Auto: configure datasets and charts for filter operation ===
+        # 1. always_filter_main_dttm on all datasets
         datasets_auto = await _ensure_datasets_filter_ready(client, dashboard_id)
         if datasets_auto:
             response["_auto_datasets_updated"] = datasets_auto
 
-        # 2. granularity_sqla + проверка колонок для ВСЕХ фильтров
-        # Берём первый фильтр для auto_fix (granularity_sqla из time или main_dttm_col)
+        # 2. granularity_sqla + column check for ALL filters
+        # Use the first filter for auto_fix (granularity_sqla from time or main_dttm_col)
         first_fd = filter_defs[0] if filter_defs else {}
         first_type = first_fd.get("type", "filter_select")
         first_col = first_fd.get("column", "")
