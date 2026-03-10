@@ -1,4 +1,4 @@
-"""Entry point: python -m superset_mcp or `mcp-superset` CLI."""
+"""Entry point: python -m mcp_superset or `mcp-superset` CLI."""
 
 import argparse
 import os
@@ -51,7 +51,7 @@ def main():
     parser.add_argument(
         "--version",
         action="version",
-        version="%(prog)s 0.1.0",
+        version="%(prog)s 0.2.0",
     )
 
     args = parser.parse_args()
@@ -60,7 +60,7 @@ def main():
     if args.env_file:
         os.environ["SUPERSET_MCP_ENV_FILE"] = args.env_file
 
-    from superset_mcp.server import mcp
+    from mcp_superset.server import mcp
 
     kwargs = {"transport": args.transport}
     if args.transport != "stdio":

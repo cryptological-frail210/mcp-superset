@@ -4,7 +4,7 @@ import base64
 import json
 import re
 
-from superset_mcp.tools.helpers import auto_sync_chart_dashboards
+from mcp_superset.tools.helpers import auto_sync_chart_dashboards
 
 # Паттерны moment.js форматов дат, которые НЕ работают в Superset 6.x
 # Superset использует D3 strftime (%Y-%m-%d), moment.js (YYYY-MM-DD) показывает литерал
@@ -235,7 +235,7 @@ def _validate_query_context(query_context_str: str | None) -> str | None:
 
 
 def register_chart_tools(mcp):
-    from superset_mcp.server import superset_client as client
+    from mcp_superset.server import superset_client as client
 
     @mcp.tool
     async def superset_chart_list(

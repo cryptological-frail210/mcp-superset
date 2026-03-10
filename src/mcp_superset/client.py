@@ -4,7 +4,7 @@ from typing import Any
 
 import httpx
 
-from superset_mcp.auth import AuthManager
+from mcp_superset.auth import AuthManager
 
 
 class SupersetClient:

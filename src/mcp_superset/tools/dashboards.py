@@ -192,8 +192,8 @@ async def _auto_fix_charts_for_filter(
 
 
 def register_dashboard_tools(mcp):
-    from superset_mcp.server import superset_client as client
-    from superset_mcp.tools.helpers import auto_sync_dashboard_access
+    from mcp_superset.server import superset_client as client
+    from mcp_superset.tools.helpers import auto_sync_dashboard_access
 
     async def _validate_kpi_height(position: dict) -> str | None:
         """Проверяет что KPI-чарты (big_number_total/big_number) имеют высоту >= 2 клеток.

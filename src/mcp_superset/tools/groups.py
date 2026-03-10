@@ -4,7 +4,7 @@ import json
 
 
 def register_group_tools(mcp):
-    from superset_mcp.server import superset_client as client
+    from mcp_superset.server import superset_client as client
 
     # === Группы ===
 

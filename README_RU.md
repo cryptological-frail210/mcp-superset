@@ -108,7 +108,7 @@ mcp-superset
 uvx mcp-superset
 
 # Через Python-модуль
-python -m superset_mcp
+python -m mcp_superset
 
 # Через uv из исходников
 uv run mcp-superset
@@ -246,7 +246,7 @@ superset-mcp/
 ├── README.md                   # Документация (English)
 ├── README_RU.md                # Документация (Русский)
 ├── CHANGELOG.md                # История версий
-└── src/superset_mcp/
+└── src/mcp_superset/
     ├── __init__.py             # Инициализация с __version__
     ├── __main__.py             # CLI с argparse
     ├── server.py               # Настройка FastMCP-сервера
@@ -310,7 +310,7 @@ cp .env.example .env
 
 ```bash
 # Запуск из исходников
-uv run python -m superset_mcp
+uv run python -m mcp_superset
 
 # Или через CLI
 uv run mcp-superset --port 8001

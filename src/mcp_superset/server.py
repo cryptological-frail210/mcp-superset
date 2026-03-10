@@ -6,9 +6,9 @@ from pathlib import Path
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 
-from superset_mcp.auth import AuthManager
-from superset_mcp.client import SupersetClient
-from superset_mcp.tools import register_all_tools
+from mcp_superset.auth import AuthManager
+from mcp_superset.client import SupersetClient
+from mcp_superset.tools import register_all_tools
 
 # Load .env — custom path via env var, or auto-detect from package directory
 _custom_env = os.environ.get("SUPERSET_MCP_ENV_FILE")

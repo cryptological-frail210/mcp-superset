@@ -50,7 +50,7 @@ async def _find_datasource_permissions(
 
 
 def register_security_tools(mcp):
-    from superset_mcp.server import superset_client as client
+    from mcp_superset.server import superset_client as client
 
     # === Текущий пользователь ===
 

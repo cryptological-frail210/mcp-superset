@@ -18,7 +18,7 @@ def _strip_sql_comments(sql: str) -> str:
 
 
 def register_query_tools(mcp):
-    from superset_mcp.server import superset_client as client
+    from mcp_superset.server import superset_client as client
 
     @mcp.tool
     async def superset_sqllab_execute(

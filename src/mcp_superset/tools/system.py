@@ -5,7 +5,7 @@ import json
 
 
 def register_system_tools(mcp):
-    from superset_mcp.server import superset_client as client
+    from mcp_superset.server import superset_client as client
 
     # === Reports / Alerts ===
 
@@ -290,7 +290,7 @@ def register_system_tools(mcp):
 
         Возвращает URL, используемый MCP-сервером для подключения к Superset.
         """
-        from superset_mcp.server import SUPERSET_BASE_URL
+        from mcp_superset.server import SUPERSET_BASE_URL
 
         return json.dumps({"base_url": SUPERSET_BASE_URL}, ensure_ascii=False)
 
